@@ -1,0 +1,10 @@
+{
+	"compilerOptions": {
+		"watch": true,
+		"allowJs": true,
+		"alwaysStrict":  true,
+		"lib": ["ESNext"],
+		"target": "ESNext",
+		"outDir": "compiled"
+	},
+}
