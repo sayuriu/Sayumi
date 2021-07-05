@@ -1,10 +1,15 @@
 {
 	"compilerOptions": {
-		"watch": true,
 		"allowJs": true,
+		"allowSyntheticDefaultImports": true,
 		"alwaysStrict":  true,
-		"lib": ["ESNext"],
+		"checkJs": true,
+		"lib": ["DOM", "ESNext"],
+		"moduleResolution": "node",
+		"outDir": "compiled",
+		"pretty": true,
+		"resolveJsonModule": true,
 		"target": "ESNext",
-		"outDir": "compiled"
-	},
+		"watch": true
+	}
 }

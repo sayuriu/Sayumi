@@ -1,0 +1,83 @@
+{
+	"root": true,
+	"env": {
+		"es6": true,
+		"node": true
+	},
+
+	"parser": "@typescript-eslint/parser",
+	"parserOptions": {
+		"project": "./tsconfig.eslint.json",
+		"ecmaVersion": 2021,
+		"sourceType": "script"
+	},
+
+	"plugins": [
+		"@typescript-eslint"
+	],
+
+	"extends": [
+		"eslint:recommended",
+		"plugin:@typescript-eslint/eslint-recommended",
+		"plugin:@typescript-eslint/recommended",
+		"plugin:@typescript-eslint/recommended-requiring-type-checking",
+		"plugin:import/errors",
+		"plugin:import/warnings",
+		"plugin:import/typescript"
+	],
+
+	"settings": {
+		"typescript": {
+
+		}
+	},
+
+	"rules": {
+		"brace-style": ["off", "stroustrup", { "allowSingleLine": true }],
+		"comma-dangle": ["error", "always-multiline"],
+		"comma-spacing": "error",
+		"comma-style": "error",
+		"curly": ["off", "multi-line", "consistent"],
+		"dot-location": ["error", "property"],
+		"handle-callback-err": "off",
+		"indent": ["off", "tab"],
+		"max-nested-callbacks": ["error", { "max": 4 }],
+		"max-statements-per-line": ["error", { "max": 2 }],
+		"no-console": "off",
+		"no-empty-function": "error",
+		"no-floating-decimal": "error",
+		"no-inline-comments": "error",
+		"no-lonely-if": "error",
+		"no-multi-spaces": "off",
+		"no-multiple-empty-lines": ["error", { "max": 2, "maxEOF": 1, "maxBOF": 0 }],
+		"no-shadow": ["error", { "allow": ["err", "resolve", "reject"] }],
+		"no-trailing-spaces": ["error"],
+		"no-var": "error",
+		"no-unused-vars": "off",
+		"object-curly-spacing": ["error", "always"],
+		"prefer-const": "warn",
+		"quotes": ["off", "single"],
+		"semi": ["error", "always"],
+		"space-before-blocks": "error",
+		"space-before-function-paren": ["error", {
+			"anonymous": "never",
+			"named": "never",
+			"asyncArrow": "always"
+		}],
+		"space-in-parens": "error",
+		"space-infix-ops": "error",
+		"space-unary-ops": "error",
+		"spaced-comment": "error",
+		"yoda": "error",
+
+		// ts
+		"@typescript-eslint/brace-style": ["off", "stroustrup", { "allowSingleLine": true }],
+		"@typescript-eslint/curly": ["off", "multi-line", "consistent"],
+		"@typescript-eslint/handle-callback-err": "off",
+		"@typescript-eslint/indent": ["off", "tab"],
+		"@typescript-eslint/no-console": "off",
+		"@typescript-eslint/no-empty-function": "off",
+		"@typescript-eslint/no-multi-spaces": "off",
+		"@typescript-eslint/no-unused-vars": "off"
+	}
+}
