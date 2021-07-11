@@ -5,7 +5,7 @@ dotenv.config();
 new Sayumi_Bot({
 	core: {
 		token: process.env.TOKEN,
-		bugChannelID: '630334027081056287',
+		bugChannelID: process.env.BUG_CHANNEL_ID,
 		MusicPlayerOptions: {
 			autoSelfDeaf: true,
 			// not enough processing power for lives but welp
