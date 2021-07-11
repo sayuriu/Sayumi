@@ -4,12 +4,13 @@
 		"allowSyntheticDefaultImports": true,
 		"alwaysStrict":  true,
 		"checkJs": true,
-		"lib": ["DOM", "ESNext"],
+		"lib": ["DOM", "ES7"],
+		"module": "CommonJS",
 		"moduleResolution": "node",
-		"outDir": "compiled",
 		"pretty": true,
 		"resolveJsonModule": true,
-		"target": "ESNext",
+		"target": "ES2015",
+		"sourceMap": true,
 		"watch": true
 	}
 }

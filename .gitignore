@@ -1,4 +1,7 @@
 node_modules
-package-lock.json
+.env
 .vscode
-compiled
+package-lock.json
+**/*.js
+**/*.js.map
+**/*.log

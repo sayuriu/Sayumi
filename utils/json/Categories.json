@@ -1,0 +1,88 @@
+{
+    "Unassigned": {
+        "name": "Unassigned",
+        "description": "I wonder if Sayuri done naming those....",
+        "colorCode": "#ed6f45",
+        "keywords": [
+            "unassigned"
+        ]
+    },
+    "Server Management": {
+        "name": "Server Management",
+        "description": "Used to manage the server in your way.",
+        "colorCode": "#a882fa",
+        "keywords": [
+            "server"
+        ]
+    },
+    "Information": {
+        "name": "Information",
+        "description": "All about info requesting!",
+        "colorCode": "#82c8fa",
+        "keywords": [
+            "inforeq",
+            "information"
+        ]
+    },
+    "Settings": {
+        "name": "Settings",
+        "special": true,
+        "description": "Internal settings for Sayumi.",
+        "colorCode": "#d882fa",
+        "keywords": [
+            "settings"
+        ]
+    },
+    "Utilities": {
+        "name": "Utilities",
+        "description": "Utilities and fun tools maybe?",
+        "colorCode": "#90fa82",
+        "keywords": [
+            "util",
+            "utils",
+            "utilities"
+        ]
+    },
+    "Emotes": {
+        "name": "Emotes",
+        "description": "",
+        "colorCode": "#000000",
+        "keywords": [
+            "emotes"
+        ]
+    },
+    "Moderation": {
+        "name": "Moderation",
+        "description": "Command sets that will help you with moderating work.",
+        "colorCode": "#000000",
+        "keywords": [
+            "mod",
+            "moderation"
+        ]
+    },
+    "NASA": {
+        "name": "NASA",
+        "description": "Time to look into space.",
+        "colorCode": "#000000",
+        "keywords": [
+            "nasa"
+        ]
+    },
+    "Fun": {
+        "name": "Fun",
+        "description": "Funnies and unfunnies.",
+        "colorCode": "#000000",
+        "keywords": [
+            "fun"
+        ]
+    },
+    "lastUpdated": 1625738981568,
+    "Music": {
+        "name": "Music",
+        "description": "Memes or vibes, be sure to have a good time.",
+        "colorCode": "#e35679",
+        "keywords": [
+            "music"
+        ]
+    }
+}

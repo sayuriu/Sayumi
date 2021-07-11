@@ -1,0 +1,9 @@
+{
+	"clear": [
+		{ "name": "log", "flags": ["-log", "-logs", "-error", "-errors", "-all"] },
+		{ "name": "tempfiles", "flags": null }
+	],
+	"eval": {
+		"flags": ["-showHidden", "-showhidden", "-sh", "-SH"]
+	}
+}

@@ -2,10 +2,8 @@
 	"extends": "./tsconfig.json",
 	"include": [
         "**/*.ts",
-        "**/*.js"
     ],
 	"exclude": [
-		"compiled",
 		"node_modules"
 	],
 }
