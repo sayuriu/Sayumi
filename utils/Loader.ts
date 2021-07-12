@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
@@ -8,15 +9,22 @@
 
 import { lstatSync, statSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import readline from 'readline';
-import * as chalk from 'chalk';
+import * as readline from 'readline';
+import chalk from 'chalk';
 
 import ParseError, { Errors } from './functions/common/parse-errors';
 import groupSettings from './GroupSettings';
-import CategoryList from '../utils/json/Categories.json';
-import { Sayumi_Main } from './Client';
+import * as Categories from '../utils/json/Categories.json';
+import Sayumi from './Client';
 import Sayumi_Command from './interfaces/Command';
 import Sayumi_Event from './interfaces/Event';
+
+declare function require(id:string): Sayumi_Command | Sayumi_Event;
+declare namespace require {
+	export const cache: string[];
+	export const resolve: (id: string, options?: { paths?: string[]; }) => string;
+}
+
 
 interface DirIndex
 {
@@ -29,7 +37,6 @@ interface DirIndex
 }
 
 type AllowedTypes = 'cmd' | 'evt';
-export type Sayumi_CMDorEVT = Sayumi_Command & Sayumi_Event;
 
 abstract class Loader_Base
 {
@@ -46,7 +53,7 @@ abstract class Loader_Base
 
 export default class Loader extends Loader_Base
 {
-	constructor(client: Sayumi_Main, [path, type]: [string, AllowedTypes])
+	constructor(client: Client, [path, type]: [string, AllowedTypes])
 	{
 		super();
 		this.mainRoot = client.ROOT_DIR;
@@ -95,11 +102,11 @@ export default class Loader extends Loader_Base
 		summarize(client, this, this.type);
 	}
 
-	recursiveLoad(client: Sayumi_Main, path: string): void
+	recursiveLoad(client: Client, path: string): void
 	{
 		readdirSync(path).forEach(file => {
-			const dirPath = join(path, file);
-			const fullPath = join(this.mainRoot, dirPath);
+			const fullPath = join(path, file);
+			// const fullPath = join(this.mainRoot, dirPath);
 
 			if (lstatSync(fullPath).isDirectory()) return this.recursiveLoad(client, fullPath);
 			if (file.endsWith(".js")) ParseCheck(this.type, client, fullPath, this);
@@ -108,27 +115,26 @@ export default class Loader extends Loader_Base
 	}
 }
 
-export function ParseCheck(type: AllowedTypes, client: Sayumi_Main, path: string, data: any): number
+export function ParseCheck(type: AllowedTypes, client: Client, path: string, data: any): number
 {
-	let { size: sizec } = data.dirIndex ?? { size: 0 };
 	const { invalidNames, emptyFiles, noFunc, errored } = data.dirIndex ?? { invalidNames: [], emptyFiles: [], noFunc: [], errored: [] };
 
 	try
 	{
-		let object: Sayumi_CMDorEVT = require(path);
-		const { name } = object;
+		let object = require(require.resolve(`.\\..\\${path}`));
+
 		const size = statSync(path).size;
-		sizec += size;
+		const { name } = object;
+		data.dirIndex.size += size;
 
-		const actualPath = path.split('\\').splice(3, path.split('\\').length).join('\\');
+		if (!size) return emptyFiles.push(path);
 
-		if (!size) return emptyFiles.push(actualPath);
-
-		if (!name || typeof name !== 'string') return invalidNames.push(actualPath);
+		if (!name || typeof name !== 'string') return invalidNames.push(path);
 
 		if (type === 'cmd')
 		{
-			const { aliases, onTrigger, groups: group } = object;
+			const { aliases, onTrigger, groups: group } = object as Sayumi_Command;
+
 			if (group?.length)
             {
                 for (let i = 0; i < group.length; i++)
@@ -146,12 +152,12 @@ export function ParseCheck(type: AllowedTypes, client: Sayumi_Main, path: string
                 }
 			}
 			// Check for command's functions
-			if (!onTrigger || typeof onTrigger !== 'function') return noFunc.push(name ? `"${name}": ${actualPath}` : actualPath);
+			if (!onTrigger || typeof onTrigger !== 'function') return noFunc.push(name ? `"${name}": ${path}` : path);
 
 			client.CommandList.set(
                 name,
                 Object.assign(
-                    object,
+                    object as Sayumi_Command,
                     { memWeight: size, loadTime: Date.now() },
                 ),
             );
@@ -162,15 +168,15 @@ export function ParseCheck(type: AllowedTypes, client: Sayumi_Main, path: string
 
 		if (type === 'evt')
 		{
-			const { once, onEmit, music } = object;
+			const { once, onEmit, music } = object as Sayumi_Event;
 
-			if (!onEmit || typeof onEmit !== 'function') return noFunc.push(name ? `"${name}": ${actualPath}` : actualPath);
+			if (!onEmit || typeof onEmit !== 'function') return noFunc.push(name ? `"${name}": ${path}` : path);
 
 			// Remove old identical listeners if found to prevent overlapping
             if (music)
             {
-                client.MusicPlayer.removeAllListeners(name);
-                client.MusicPlayer.on(name, onEmit.bind(null, client));
+                client.MusicPlayer.removeAllListeners(name as keyof PlayerEvents);
+                client.MusicPlayer.on(name as keyof PlayerEvents, onEmit.bind(null, client));
             }
             else
             {
@@ -208,6 +214,7 @@ export function IssueWarns(dirIndex: DirIndex, type: AllowedTypes | string): boo
     {
         const map = new Map<string, string[][]>();
         errored.forEach(e => ParseError(e, map));
+		console.log(errored);
 
         if (!map.size) return process.stdout.write(`An ${chalk.hex('#d13636')(`error`)} has been detected while loading assets. Please attach breakpoints on this function next time to track down.\n`);
         process.stdout.write(`Those files had ${chalk.hex('#d13636')(`errors`)} while compiling and skipped:\n`);
@@ -245,7 +252,7 @@ export function IssueWarns(dirIndex: DirIndex, type: AllowedTypes | string): boo
 	return true;
 }
 
-function summarize(client: Sayumi_Main, data: Loader, type: AllowedTypes)
+function summarize(client: Client, data: Loader, type: AllowedTypes)
 {
 	const { ConvertBytes: calBytes } = client.Methods.Data;
 	const cmdc = client.CommandList.size;
@@ -262,7 +269,7 @@ function summarize(client: Sayumi_Main, data: Loader, type: AllowedTypes)
 }
 
 /** Sums up all command names and aliases into an array. */
-function EntryMergeAll(client: Sayumi_Main): string[]
+function EntryMergeAll(client: Client): string[]
 {
     const allNames: string[] = [];
     let allAliases: string[] = [];
@@ -280,7 +287,7 @@ function EntryMergeAll(client: Sayumi_Main): string[]
 	const empty: string[] = [];
     return empty.concat(allNames, allAliases);
 }
-function dupFinder<T>(arr: T[])
+function dupFinder<K>(arr: K[])
 {
 	return arr.filter((entry, index: number) => arr.indexOf(entry) !== index);
 }
@@ -288,8 +295,9 @@ function dupFinder<T>(arr: T[])
 /** Binds each command loaded from the list to its approriate c ategories.
  * @param {object} client The client to pass in.
  */
-function BindCategory(client: Sayumi_Main)
+function BindCategory(client: Client)
 {
+	const CategoryList = Object.assign({}, Categories);
 	const groupArray: string[] = [];
 
 	// Set categories for comparing
@@ -337,7 +345,7 @@ function BindCategory(client: Sayumi_Main)
 		const underDevArray: string[] = [];
 
 		client.CommandList.forEach(cmd => {
-			if (cmd.groups.some(name => name === group))
+			if (cmd.groups?.some(name => name === group))
 			{
 				commandArray.push(cmd.name);
 				if (cmd.flags && cmd.flags.some(i => i === 'Under Developement')) underDevArray.push(cmd.name);
@@ -356,6 +364,23 @@ function BindCategory(client: Sayumi_Main)
 	});
 
 	CategoryList.lastUpdated = Date.now();
-	writeFileSync('./json/Categories.json', JSON.stringify(CategoryList, null, 4));
+	writeFileSync('./utils/json/Categories.json', JSON.stringify(CategoryList, null, 4));
 }
 
+import { Collection } from 'discord.js';
+import Command_Group from './interfaces/CmdGroup';
+import { Player as MusicPlayer, PlayerEvents } from 'discord-player';
+import Methods from './Methods';
+
+interface Client extends NodeJS.EventEmitter
+{
+	ROOT_DIR: string;
+	HANDLED_EVENTS: number;
+	CommandList: Collection<string, Sayumi_Command>;
+	CommandAliases: Collection<string[], string>;
+	CommandCategories: Collection<string, Command_Group>;
+	CategoryCompare: Collection<string, string[]>;
+
+	MusicPlayer: MusicPlayer;
+	Methods: typeof Methods;
+}

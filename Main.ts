@@ -21,6 +21,8 @@ new Sayumi_Bot({
 				filter: 'audioonly',
 			},
 		},
+		evtFolder: 'events',
+		cmdFolder: 'executables',
 	},
 	DSBotOptions: {
 		intents: [
@@ -39,5 +41,12 @@ new Sayumi_Bot({
 			'GUILD_VOICE_STATES',
 			'GUILD_WEBHOOKS',
 		],
+	},
+	databaseOptions: {
+		local: true,
+		uri: 'mongodb://localhost/sayumi',
+		// uri: 'mongodb+srv://${username}:${password}@main-ftdmd.azure.mongodb.net/sayumi',
+		username: process.env.DATABASE_USERNAME,
+		password: process.env.DATABASE_PASSWORD,
 	},
 });

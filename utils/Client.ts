@@ -22,17 +22,24 @@ import {
 	User,
 } from 'discord.js';
 import { Player as MusicPlayer, PlayerOptions } from 'discord-player';
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 import { watch, stat, readFileSync } from 'fs';
 import { join } from 'path';
+import { Types } from 'mongoose';
 
 import logCarrier, { error, bootstrap, debug, info, warn } from './Logger';
+import AFKUser from './interfaces/AFKUser';
 import Sayumi_Command from './interfaces/Command';
 import Command_Group from './interfaces/CmdGroup';
-import { Database } from './abstract/db';
-import GuildDatabase, { GuildData } from './abstract/guilddb';
+import { DatabaseInitOption } from './interfaces/DatabaseInitOption';
+import GuildData from './interfaces/GuildData';
+import Database from './Database';
 import Methods from './Methods';
-import Loader, { IssueWarns, ParseCheck, Sayumi_CMDorEVT } from './Loader';
+import Loader, { IssueWarns, ParseCheck } from './Loader';
+import GuildDatabase from './database/methods/GuildActions';
+import ClientBootstrap from './database/models/client_bootstrap';
+import Sayumi_Event from './interfaces/Event';
+import EmbedConstructor from './Embeds';
 
 const DefaultIntents: IntentsString[] = [
 	'GUILDS',
@@ -48,25 +55,30 @@ const DefaultIntents: IntentsString[] = [
 	'GUILD_WEBHOOKS',
 ];
 
+const red = (message: string) => chalk.hex('#E73B3B')(message);
+
 export default class Sayumi extends DSClient implements Sayumi_BaseClient
 {
 	// #region Define
-	readonly ROOT_DIR = __dirname;
+	readonly ROOT_DIR = `${__dirname}\\..`;
+	readonly master = process.env.MASTER;
 	public HANDLED_EVENTS = 0;
 	public CommandList = new Collection<string, Sayumi_Command>();
 	public CommandAliases = new Collection<string[], string>();
 	public CommandCategories = new Collection<string, Command_Group>();
 	public CategoryCompare = new Collection<string, string[]>();
+	public Cooldowns = new Collection<string, Collection<string, number>>();
 
 	public CachedGuildSettings = new Collection<string, GuildData>();
 	public EvalSessions = new Collection<string, EvalSession>();
 	public AFKUsers = new Collection<string, AFKUser>();
 
 	public MusicPlayer: MusicPlayer;
+	public Embeds = EmbedConstructor;
 
-	public Database = Object.assign(Database, {
-		Guild: GuildDatabase,
-	})
+	public Database: Database & {
+		Guild: typeof GuildDatabase,
+	}
 
 	public Methods = Methods;
 	public Log = Object.assign(logCarrier, {
@@ -76,8 +88,9 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		warn,
 	})
 
-	// #endregion
-
+	private cmdDir: string;
+	private evtDir: string;
+	private _bugChannelID: string;
 	get DefaultMusicPlayerSettings(): ExtMusicPlayerOptions {
 		return {
 			enableLive: true,
@@ -92,46 +105,54 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 			},
 		};
 	}
+	// #endregion
 
-	constructor({ core, DSBotOptions }: Sayumi_BotClientConfig)
+	constructor({ core, DSBotOptions, databaseOptions }: Sayumi_BotClientConfig)
 	{
-		super(DSBotOptions);
 		console.clear();
-		this.HandleProcessErrors();
 		bootstrap();
-		if (!DSBotOptions.intents)
+		if (!DSBotOptions?.intents)
 		{
 			warn([
-				'Missing intents in client configuration This causes me to have soome problems.',
-				'Recommended intents:',
-				chalk.hex('9AA83A')(DefaultIntents.toString()),
-				'You can overwrite this configuration by specifying intents via' + chalk.hex('#9872A2')('DSBotOptions.intents') + 'property in class contructor.',
+				'[Sayumi] Missing intents in client configuration. Those will be applied to ensure minimum functionality.',
+				chalk.hex('#9AA83A')(DefaultIntents.map(i => `  ${i}`).join('\n')),
+				'You can overwrite this configuration by specifying intents via ' + chalk.hex('#9872A2')('DSBotOptions.intents') + ' property in class contructor.',
 			].join('\n'));
-			DSBotOptions.intents = DefaultIntents;
+			DSBotOptions = Object.assign(DSBotOptions || {}, { intents: DefaultIntents });
 		}
 
-		if (!core.MusicPlayerOptions) core.MusicPlayerOptions = this.DefaultMusicPlayerSettings;
-		// this._bugChannelID = core.bugChannelID;
+		super(DSBotOptions);
+		this.HandleProcessErrors();
+		const { token, cmdFolder, evtFolder, bugChannelID, MusicPlayerOptions } = core;
 
-		this.MusicPlayer = new MusicPlayer(this, core.MusicPlayerOptions);
+		this.cmdDir = cmdFolder ?? 'executables';
+		this.evtDir = evtFolder ?? 'events';
+
+		this._bugChannelID = bugChannelID;
+		this.MusicPlayer = new MusicPlayer(this, MusicPlayerOptions ?? this.DefaultMusicPlayerSettings);
 		this.MusicPlayer.setMaxListeners(1);
 
-		void this.login(core.token);
+		void this.login(token).then(() => this.BootstrapDBLog());
 		this.EventListener();
 		this.CommandInit();
-		this.WatchDog(this.ROOT_DIR);
+
+		// To skip tsc compile logs
+		this.setTimeout(() => this.WatchDog(this.ROOT_DIR), 6000);
+
+		if (!databaseOptions) info(`[Database] Offline mode is active. Calling any methods under '${chalk.hex('#2186FA')('<client>')}.${red('Database')}' will raise an ${red('error')}.\nReason: Database initiate option was not specified.`);
+		this.Database = Object.assign(new Database(databaseOptions), { Guild: GuildDatabase });
 	}
 
 	/** Initiates the event listener. */
 	private EventListener(): void
 	{
-		new Loader(this, ['events', 'evt']);
+		new Loader(this as Sayumi, [this.evtDir, 'evt']);
 	}
 
 	/** Loads the executables from the library. */
 	private CommandInit(): void
 	{
-		new Loader(this, ['executables', 'cmd']);
+		new Loader(this as Sayumi, [this.cmdDir, 'cmd']);
 	}
 
 	/** This is for handling some additional runtime errors and events. */
@@ -140,7 +161,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
         process.on("uncaughtException", err => {
             error(`[Uncaught Exception] ${err.message}\n${err.stack}`);
         });
-        process.on("unhandledRejection", (err: UnhandledPromiseRejection) => {
+        process.on("unhandledRejection", (err: Error) => {
             error(`[Unhandled Promise Rejection] ${err.message}\n${err.stack}`);
         });
         process.on('exit', code => {
@@ -148,6 +169,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
         });
     }
 
+	/** Hot reload! */
 	private WatchDog(rootDir: string): void
 	{
 		const FSEventTimeout = new Map<string, boolean>();
@@ -159,7 +181,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 				const { resolve } = require;
 				const file = path.split('\\')[path.split('\\').length - 1];
 
-				const print_change = (cmdOrEvt: Sayumi_CMDorEVT | Record<string, any>) => {
+				const print_change = (cmdOrEvt: Sayumi_Command | Sayumi_Event | Record<string, any>) => {
                     Object.keys(cmdOrEvt).length ?
                     debug(`[Reload > ud] Updated ${cmdOrEvt.name || 'something at'} [${printCSLPath.split('\\').join(' > ')}]`) :
                     debug(`[Reload > rg] Registered ${cmdOrEvt.name  || 'something at'} [${printCSLPath.split('\\').join(' > ')}]`);
@@ -282,9 +304,30 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
             setTimeout(() => FSEventTimeout.delete(pathName), 500);
         };
 	}
-}
 
-export interface Sayumi_Main extends Sayumi {}
+	private BootstrapDBLog(): void
+	{
+		if (this.Database.disabled) return;
+		new ClientBootstrap({
+			_id: Types.ObjectId(),
+			host: `${process.env.USERDOMAIN} as ${process.env.USERNAME}`,
+			shardCount: this.ws.shards.size,
+			readyAt: this.readyAt,
+			readyTimestamp: this.readyTimestamp,
+			ping: this.ws.ping,
+			wsStatus: this.ws.status,
+			gateway: this.ws.gateway,
+			cmds: this.CommandList.size,
+			events: this.HANDLED_EVENTS,
+			cachedUsers: this.users.cache.size,
+			cachedGuilds: this.guilds.cache.size,
+		})
+		.save({}, (err) => {
+			if (err) return error(`[Database > Client Init Sync] ${err}`);
+		});
+		return;
+	}
+}
 
 abstract class Sayumi_BaseClient
 {
@@ -296,7 +339,7 @@ abstract class Sayumi_BaseClient
 
 	CachedGuildSettings: Collection<string, GuildData>;
 	AFKUsers: Collection<string, AFKUser>;
-	Database: typeof Database & {
+	Database: Database & {
 		Guild: typeof GuildDatabase;
 	}
 	[key: string]: any;
@@ -313,15 +356,13 @@ interface Sayumi_BotClientConfig
 {
 	core: {
 		token: string;
+		evtFolder: string;
+		cmdFolder: string;
 		bugChannelID?: string;
-		MusicPlayerOptions?: ExtMusicPlayerOptions
+		MusicPlayerOptions?: ExtMusicPlayerOptions;
 	}
-	DSBotOptions: ClientOptions
-}
-
-interface UnhandledPromiseRejection extends Error {
-	message: string;
-	stack: string;
+	DSBotOptions?: ClientOptions;
+	databaseOptions?: DatabaseInitOption;
 }
 
 abstract class EvalSession
@@ -360,13 +401,4 @@ abstract class EvalSession
 	resetState: () => void;
 	destroy: () => void;
 	resetUI: () => void;
-}
-
-interface AFKUser
-{
-	name: string;
-	id: string;
-	reason: string;
-	AFKTimestamp: number;
-	lastChannel: string;
 }

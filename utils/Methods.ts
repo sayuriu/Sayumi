@@ -16,6 +16,7 @@ import SearchString from './functions/common/string-search';
 // #region Time
 import GetTime from './functions/time/get-time';
 import ParseTimeCode from './functions/time/parse-time-code';
+import TimestampToTime from './functions/time/timestamp-to-time';
 // #endregion
 
 // #region DirSet
@@ -41,6 +42,7 @@ const Methods = {
 	Time: {
 		GetTime,
 		ParseTimeCode,
+		TimestampToTime,
 	},
 	Data: {
 		ConvertBytes,

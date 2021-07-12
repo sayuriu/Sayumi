@@ -1,6 +1,6 @@
 {
 	"name": "sayumi",
-	"version": "1.0.0",
+	"version": "1.32.23b723",
 	"description": "Sayumi, rewritten in TypeScript.",
 	"main": "main",
 	"scripts": {
@@ -29,7 +29,7 @@
 		"chalk": "^4.1.1",
 		"colorthief": "^2.3.2",
 		"discord-player": "^5.0.0-dev.92a3409.1625961740",
-		"discord.js": "^13.0.0-dev.d433fe8.1625961832",
+		"discord.js": "^13.0.0-dev.a8984bc.1626048234",
 		"erlpack": "^0.1.3",
 		"express": "^4.17.1",
 		"ffmpeg-static": "^4.3.0",
@@ -46,7 +46,8 @@
 	},
 	"devDependencies": {
 		"@discordjs/opus": "^0.3.3",
-		"@types/node": "^10.17.60",
+		"@types/node": "^16.3.1",
+		"@types/request": "^2.48.6",
 		"@typescript-eslint/eslint-plugin": "^4.28.1",
 		"@typescript-eslint/parser": "^4.28.1",
 		"bufferutil": "^4.0.3",

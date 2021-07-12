@@ -7,7 +7,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 import { createLogger, transports, format, Logger } from 'winston';
-import * as chalk from 'chalk';
+import chalk from 'chalk';
 import { existsSync, mkdirSync } from 'fs';
 import { name as pName, author, version, dependencies, repository } from '../package.json';
 import DateTime from './functions/time/get-time';

@@ -5,7 +5,7 @@ import Sayumi from "../Client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface Sayumi_Event
 {
-	name: string & keyof ClientEvents & keyof PlayerEvents
+	name: string | keyof ClientEvents | keyof PlayerEvents
 	once?: boolean;
 	music?: boolean;
 	onEmit: (client: Sayumi, ...args: any[]) => void;

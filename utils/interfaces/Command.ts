@@ -36,7 +36,7 @@ interface Sayumi_Command
 	/** `[optional]` Who can use this command. (Must associate with `ReqPerms`) */
 	reqUsers?: string[];
 	/** `[optional]` You know the rules, and so do I~ (__Seriously, think carefully.__)*/
-	nsfw?: boolean;
+	nsfw?: boolean | 'partial';
 	/** `[optional]` Enable if this command is owner-exclusive. This will bypass some parameters.*/
 	master_explicit?: boolean;
 	/** `[optional]` This command's usage. A prefix is pre-included, so only provide parameters here. */
@@ -51,6 +51,9 @@ interface Sayumi_Command
 	notes?: string[];
 	/** `[REQUIRED]` The function which executes when this command is called. */
 	onTrigger: (client: Sayumi, message: Message, ...args: any[]) => void;
+
+	// Hidden
+	prompt?: boolean;
 }
 
 export default Sayumi_Command;

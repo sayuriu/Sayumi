@@ -16,6 +16,7 @@ interface GuildData
 	MusicPlayerSettings?: MusicPlayerSettings;
 	AllowPartialNSFW?: boolean;
 	AFKUsers?: boolean;
+	autoUpdate?: NodeJS.Timeout;
 }
 
 interface MusicPlayerSettings
