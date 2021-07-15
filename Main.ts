@@ -44,8 +44,9 @@ new Sayumi_Bot({
 	},
 	databaseOptions: {
 		local: true,
-		uri: 'mongodb://localhost/sayumi',
-		// uri: 'mongodb+srv://${username}:${password}@main-ftdmd.azure.mongodb.net/sayumi',
+		uri: process.env.DATABASE_LOCAL_URI,
+		// uri: process.env.DATABASE_REMOTE_URI,
+		// localUri: process.env.DATABASE_LOCAL_URI,
 		username: process.env.DATABASE_USERNAME,
 		password: process.env.DATABASE_PASSWORD,
 	},

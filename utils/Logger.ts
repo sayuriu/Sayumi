@@ -154,22 +154,22 @@ export const bootstrap = () => {
 /** Inform time!
  * @param {string} message The message to pass in.
  */
-export const info = (message: string): void | Logger => logCarrier('info', message);
+export const Inform = (message: string): void | Logger => logCarrier('info', message);
 
 /** Gives out a warning.
  * @param {string} message The message to pass in.
  */
-export const warn = (message: string): void | Logger => logCarrier('warn', message);
+export const Warn = (message: string): void | Logger => logCarrier('warn', message);
 
 /** Push out an error when something goes wrong.
  * @param {string} message The message to pass in.
  */
-export const error = (message: string): void | Logger => logCarrier('error', message);
+export const Error = (message: string): void | Logger => logCarrier('error', message);
 
 /** If you need to debug...
  * @param {string} message The message to pass in.
  */
-export const debug = (message: string): void | Logger => logCarrier('debug', message);
+export const Debug = (message: string): void | Logger => logCarrier('debug', message);
 
 /** Print out a custom message.
 * @param {string} logLevel The level of the log. `info | warn | error | debug | verbose | silly`. `status: StatusMessage` by default won't log to file.

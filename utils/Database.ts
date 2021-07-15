@@ -1,6 +1,7 @@
 import { DatabaseInitOption } from "./interfaces/DatabaseInitOption";
 import { connect, connection, NativeError } from "mongoose";
-import logCarrier, { error, warn } from "./Logger";
+import logCarrier, { Error, Inform, Warn } from "./Logger";
+import chalk from "chalk";
 let failedLocal = false;
 
 export default class Database
@@ -15,6 +16,7 @@ export default class Database
 	constructor(private readonly config: DatabaseInitOption)
 	{
 		if (!config) {
+			this.NotifyOffline('Database initiate option was not specified.');
 			this.disabled = true;
 			return;
 		}
@@ -28,12 +30,12 @@ export default class Database
 		else
 		{
 			if (!this.config.username) {
-				error("Database won't connect because username is missing and you are not using localhost. Please specify required data and restart this instance.");
+				Error("Database won't connect because username is missing and you are not using localhost. Please specify required data and restart this instance.");
 				this.fail = true;
 				return;
 			}
 			if (!this.config.password) {
-				error("Database won't connect because username is missing and you are not using localhost. Please specify required data and restart this instance.");
+				Error("Database won't connect because username is missing and you are not using localhost. Please specify required data and restart this instance.");
 				this.fail = true;
 				return;
 			}
@@ -50,7 +52,7 @@ export default class Database
 			if (e.message === 'connection timed out')
 			{
 				if (this.retries > 3) {
-					error(`[Database] Failed to connect: Connection timed out.`);
+					Error(`[Database] Failed to connect: Connection timed out.`);
 					return this.FallbackToLocal();
 				}
 				this.retries++;
@@ -76,10 +78,10 @@ export default class Database
 		});
 
 		this.connection.on('error', (e: NativeError) => {
-			if (this.config.local) error(`[Local Database] A connection error has occured: \n"${e.message}"`);
+			if (this.config.local) Error(`[Local Database] A connection error has occured: \n"${e.message}"`);
 			else
 			{
-				error(`[Remote Database] A connection error has occured: \n"${e.message}"`);
+				Error(`[Remote Database] A connection error has occured: \n"${e.message}"`);
 				if (this.config.localUri)
 				{
 					logCarrier('status: 500', 'This will use localhost instead.');
@@ -95,14 +97,29 @@ export default class Database
 
 	private FallbackToLocal()
 	{
-		if (!this.config.localUri) return warn('[Local Database] Fail to connect to remote database and you have no local URI to fallback. Incoming connection errors will be ignored.');
+		if (!this.config.localUri)
+		{
+			Warn('[Database] Fail to connect to remote database and you have no local URI to fallback. Incoming connection errors will be ignored.');
+			this.NotifyOffline('Failed to establish connections.');
+			return;
+		}
 		failedLocal = true;
 		this.uri = this.config.localUri;
 
 		if (this.localFallback && failedLocal) return;
-		if (this.localFallback) warn('[Local Database] Failed to connect to localhost. Incoming connection errors will be ignored.');
+		if (this.localFallback)
+		{
+			Warn('[Database] Failed to connect to localhost. Incoming connection errors will be ignored.');
+			this.NotifyOffline('Failed to establish connections.');
+		}
 
 		return this.Connect();
 	}
 
+	public NotifyOffline(reason: string): void
+	{
+		Inform(`[Database] Offline mode is active. Calling any method under '${chalk.hex('#2186FA')('<client>')}.${red('Database')}' will raise an ${red('error')}.\nReason: ${reason}\n`);
+		return;
+	}
 }
+const red = (message: string) => chalk.hex('#E73B3B')(message);

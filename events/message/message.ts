@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/unbound-method */
 import { Message, Collection, TextChannel, NewsChannel, ThreadChannel } from "discord.js";
 import Sayumi from "../../utils/Client";
 
@@ -10,7 +10,7 @@ import { ExtMessage } from "../../utils/interfaces/extended/ExtMessage";
 import { ExtQueue } from "../../utils/interfaces/extended/ExtQueue";
 import { joinVoiceChannel } from "@discordjs/voice";
 import { VoiceAdapterCreator } from "discord-player";
-
+import { Error } from "mongoose";
 
 type GuildChannels = TextChannel | NewsChannel | ThreadChannel;
 type NonThreadChannels = TextChannel | NewsChannel;
@@ -19,6 +19,7 @@ export = {
 	name: 'messageCreate',
 	onEmit: async (client: Sayumi, message: ExtMessage): Promise<void> => {
 
+		const { channel: TextCH, reply } = message;
 		let prefix = DefaultGuildSettings.prefix;
 		let source: GuildData | typeof DefaultGuildSettings;
 		const mention_self = `<@!${client.user.id}>`;
@@ -55,7 +56,7 @@ export = {
 			const IfAFK = client.AFKUsers.get(message.author.id);
 			if (IfAFK)
 			{
-				if (message.guild.me.permissions.has('MANAGE_NICKNAMES')) await message.member.setNickname(IfAFK.name).catch(() => void message.channel.send('...').then(m => m.delete()));
+				if (message.guild.me.permissions.has('MANAGE_NICKNAMES')) await message.member.setNickname(IfAFK.name).catch(() => void TextCH.send('...').then(m => m.delete()));
 				client.AFKUsers.delete(message.author.id);
 				if (message.guild && (source as GuildData).AllowedReplyOn.some(channelID => channelID === IfAFK.lastChannel)) void (client.channels.cache.find(channel => channel.id === IfAFK.lastChannel) as GuildChannels).send(`Welcome back <@!${IfAFK.id}>, I have removed your AFK!`).then(m => SelfDeteleMsg(m, 4000));
 				else;
@@ -77,12 +78,12 @@ export = {
 					if (minute > 0 && !hour) timeString = `${minute} minute${minute > 1 ? 's' : ''}`;
 					if (second > 0 && !minute && !hour) timeString = 'Just now';
 
-					void message.channel.send(`**${target.name}** is currently AFK${target.reason ? `: *${target.reason}*` : '.'} **\`[${timeString}]\`**`);
+					void TextCH.send(`**${target.name}** is currently AFK${target.reason ? `: *${target.reason}*` : '.'} **\`[${timeString}]\`**`);
 					return;
 				}
 				if (userArray.length > 1)
 				{
-					void message.channel.send(`Two or more users you are mentioning are currently AFK.`);
+					void TextCH.send(`Two or more users you are mentioning are currently AFK.`);
 					return;
 				}
 			}
@@ -99,10 +100,10 @@ export = {
 				}
 
 							// Returns when the message is sent in the listened channel (In guilds ofcourse)
-				if (message.guild && !(source as GuildData).AllowedReplyOn.includes(message.channel.id)) return;
+				if (message.guild && !(source as GuildData).AllowedReplyOn.includes(TextCH.id)) return;
 
 				// If command is typed in an eval instance's channel
-				if (client.EvalSessions.get((parseInt(message.author.id) + parseInt(message.channel.id)).toString(16))) return;
+				if (client.EvalSessions.get((parseInt(message.author.id) + parseInt(TextCH.id)).toString(16))) return;
 
 				else
 				{
@@ -111,10 +112,10 @@ export = {
 
 					if (!CommandName.length)
 					{
-						if (message.channel.type === 'DM' || (source as GuildData).FalseCMDReply.includes(message.channel.id))
+						if (TextCH.type === 'DM' || (source as GuildData).FalseCMDReply.includes(TextCH.id))
 						{
 							// functions.Cooldown(client.Cooldowns, typo, 3, message.author.id, message);
-							void message.channel.send(GetRandomize(commands.only_prefix));
+							void TextCH.send(GetRandomize(commands.only_prefix));
 						}
 						return;
 					}
@@ -132,16 +133,16 @@ export = {
 									.replace(/\${memberName}/g, message.guild ? message.member.displayName : message.author.username)
 									.replace(/\${thisPrefix}/g, prefix);
 
-						if (message.channel.type === 'DM' || (source as GuildData).FalseCMDReply.includes(message.channel.id))
+						if (TextCH.type === 'DM' || (source as GuildData).FalseCMDReply.includes(TextCH.id))
 						{
 							// functions.Cooldown(client.Cooldowns, typo, 3, message.author.id, message);
-							void message.channel.send(res);
+							void TextCH.send(res);
 						}
 						return;
 					}
 
-									// Sending guild-only commands through DMs
-					if (RequestedCommand.guildOnly && message.channel.type === 'DM') return void message.reply(GetRandomize(commands.problems.guild_only_invalid));
+					// Sending guild-only commands through DMs
+					if (RequestedCommand.guildOnly && TextCH.type === 'DM') return void reply(GetRandomize(commands.problems.guild_only_invalid));
 
 					// Cooldowns (throttling)
 					const { Cooldowns } = client;
@@ -164,7 +165,7 @@ export = {
 							if (now < expirationTime && !master)
 							{
 								const timeLeft = (expirationTime - now) / 1000;
-								return void message.reply(
+								return void reply(
 									GetRandomize([
 										// @flagged:needs-optimizations
 										`please wait ${timeLeft.toFixed(0)} second${ Math.floor(timeLeft) > 1 ? 's' : '' } before reusing`,
@@ -185,10 +186,10 @@ export = {
 						{
 							const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
 
-							if (now < expirationTime && message.channel.type !== 'DM' && !master)
+							if (now < expirationTime && TextCH.type !== 'DM' && !master)
 							{
 								const timeLeft = (expirationTime - now) / 1000;
-								return void message.reply(
+								return void reply(
 									`please wait ${timeLeft.toFixed(1)} second${ Math.floor(timeLeft) > 1 ? 's' : '' } before reusing the \`${RequestedCommand.name}\` command.`,
 								);
 							}
@@ -203,35 +204,36 @@ export = {
 					if (RequestedCommand.reqArgs && !args.length)
 					{
 						let string: string;
-						if (RequestedCommand.prompt) return void message.channel.send(RequestedCommand.prompt.toString());
+						if (RequestedCommand.prompt) return void TextCH.send(RequestedCommand.prompt.toString());
 						if (RequestedCommand.usage) string = `\nUsage: \`${prefix}${RequestedCommand.name} ${RequestedCommand.usage}\`.`;
-						return void message.channel.send(`${GetRandomize(commands.problems.empty_arguments)} ${string || ''}`);
+						return void TextCH.send(`${GetRandomize(commands.problems.empty_arguments)} ${string || ''}`);
 					}
 
 					// Master-explicit commands
 					if (RequestedCommand.master_explicit && !master) {
-						return message.channel.send(`Sorry ${message.author}, but this command can be issued by master only.`).then(msg => {
-							if ((message.channel as GuildChannels).name.includes('general')) return SelfDeteleMsg(msg, 3000);
+						return TextCH.send(`Sorry ${message.author}, but this command can be issued by master only.`).then(msg => {
+							if ((TextCH as GuildChannels).name.includes('general')) return SelfDeteleMsg(msg, 3000);
 							return SelfDeteleMsg(msg, 5000);
 						});
 					}
 
 					// NSFW commands (needs rework)
-					// if (RequestedCommand.nsfw === 'partial' && message.channel.type !== 'DM')
+					// if (RequestedCommand.nsfw === 'partial' && TextCH.type !== 'DM')
 					// {
-					// 	if (!source.AllowPartialNSFW) return message.channel.send('Please execute this command from an appropriate channel.').then(m => SelfDeteleMsg(m, 3000));
-					// 	const boolean = client.Channels.get(message.channel.id);
+					// 	if (!source.AllowPartialNSFW) return TextCH.send('Please execute this command from an appropriate channel.').then(m => SelfDeteleMsg(m, 3000));
+					// 	const boolean = client.Channels.get(TextCH.id);
 					// 	if (!boolean)
 					// 	{
-					// 		message.channel.send('This command is partial NSFW. You have been warned.');
-					// 		client.Channels.set(message.channel.id, true);
-					// 		setTimeout(() => client.Channels.delete(message.channel.id), 180000);
+					// 		TextCH.send('This command is partial NSFW. You have been warned.');
+					// 		client.Channels.set(TextCH.id, true);
+					// 		setTimeout(() => client.Channels.delete(TextCH.id), 180000);
 					// 	}
 					// }
-					if (RequestedCommand.nsfw && message.channel.type !== 'DM' && !(message.channel as NonThreadChannels).nsfw)
+
+					if (RequestedCommand.nsfw && TextCH.type !== 'DM' && !(TextCH as NonThreadChannels).nsfw)
 					{
 						if (message.deletable) void message.delete();
-						return message.channel.send('Please execute this command from an appropriate channel.').then(m => SelfDeteleMsg(m, 3000));
+						return TextCH.send('Please execute this command from an appropriate channel.').then(m => SelfDeteleMsg(m, 3000));
 					}
 
 					// Permissions-checking
@@ -260,8 +262,8 @@ export = {
 							if (!message.guild.me.permissions.has(RequestedCommand.reqPerms)) meConfirm = false;
 						}
 
-						if (!uConfirm) return void message.channel.send(`**${message.member.displayName}**, you are lacking permission to do so.`);
-						if (!meConfirm) return void message.channel.send(`Lacking permissions: \`${required.join(', ')}\``);
+						if (!uConfirm) return void TextCH.send(`**${message.member.displayName}**, you are lacking permission to do so.`);
+						if (!meConfirm) return void TextCH.send(`Lacking permissions: \`${required.join(', ')}\``);
 					}
 
 					// Try executing the command
@@ -270,12 +272,27 @@ export = {
 						if ((RequestedCommand.groups || []).includes('Music'))
 						{
 							// if not in vc
-							if (!message.member.voice.channel) return void message.channel.send('Please join the VC.');
-							if (!message.guild.me.voice) joinVoiceChannel({
-								channelId: message.member.voice.channelId,
-								guildId: message.guild.id,
-								adapterCreator: VoiceAdapterCreator(message.member.voice.channel),
-							});
+							if (!message.member.voice.channel) return void TextCH.send('Please join the VC.');
+							if (!message.guild.me.voice)
+							{
+								joinVoiceChannel({
+									debug: true,
+									channelId: message.member.voice.channelId,
+									guildId: message.guild.id,
+									adapterCreator: VoiceAdapterCreator(message.member.voice.channel),
+								});
+
+								if (!message.member.voice.channelId) return void TextCH.send('Failed to load VC data. Please try again later.');
+
+								client.MusicPlayer.createQueue(message.guild, {
+									metadata: {
+										textChannel: TextCH,
+										voiceChannel: message.guild.me.voice.channel,
+									},
+								}) as ExtQueue;
+
+								void TextCH.send(`Joined \`${message.guild.me.voice.channel}\`, requests are bound to <@${TextCH.id}>`);
+							}
 
 							const queue = client.MusicPlayer.getQueue(message.guild);
 							if (queue)
@@ -283,9 +300,9 @@ export = {
 								const ListenerChannel = (queue as ExtQueue).metadata.textChannel;
 								const VoiceChannel = (queue as ExtQueue).metadata.voiceChannel;
 								// if not in text
-								if (message.channel.id !== ListenerChannel.id) return void message.channel.send(`You are supposed to type the request in <#${ListenerChannel.id}>!`);
+								if (TextCH.id !== ListenerChannel.id) return void TextCH.send(`You are supposed to type the request in <#${ListenerChannel.id}>!`);
 								// if not in voice
-								if (message.member.voice?.channelId !== VoiceChannel.id) return void message.channel.send('Join the same voice channel as me to run requests.');
+								if (message.member.voice?.channelId !== VoiceChannel.id) return void TextCH.send('Join the same voice channel as me to run requests.');
 							}
 						}
 
@@ -294,10 +311,11 @@ export = {
 						return RequestedCommand.onTrigger(client, message);
 						// Catch errors
 					} catch (error) {
-						client.Log.error(`[Command Execution] An error has occured while executing "${RequestedCommand.name}": \n${error.message} \n${error.stack ?? ''}`);
-						void (client.channels.cache.find(ch => ch.id === process.env.BUG_CHANNEL_ID) as TextChannel).send({ embeds: [client.Embeds.error(message, error.message)] });
-						if (message.channel.type === 'GUILD_TEXT' || message.channel.type === 'DM') return void message.channel.send(GetRandomize(commands.error));
-						return void message.reply(GetRandomize(commands.error));
+						const { message: eMessage, stack: eStack } = (error as Error);
+						client.Log.Error(`[Command Execution] An error has occured while executing "${RequestedCommand.name}": \n${eMessage} \n${eStack ?? ''}`);
+						client.BugReport(message, eMessage.toString());
+						if (['DM', 'GUILD_TEXT'].includes(TextCH.type)) return void TextCH.send(GetRandomize(commands.error));
+						return void reply(GetRandomize(commands.error));
 					}
 				}
 			}

@@ -3,7 +3,7 @@
 import GuildSchema from '../models/guild';
 import { Types } from 'mongoose';
 import DefaultSettings from '../../json/DefaultGuildSettings.json';
-import { error, info } from '../../Logger';
+import { Error, Inform, Warn } from '../../Logger';
 import GuildData from '../../interfaces/GuildData';
 import GD_Base from '../../abstract/guilddb';
 import { ExtGuild } from '../../interfaces/extended/ExtGuild';
@@ -22,7 +22,7 @@ export default class GuildDatabase extends GD_Base {
 		};
 		const newGuild = new GuildSchema(GuildObject);
 		return newGuild.save().then(() => {
-			info(`[Guild Add] New settings saved for guild "${guild.name}" [ID${guild.id}]`);
+			Inform(`[Guild Add] New settings saved for guild "${guild.name}" [ID${guild.id}]`);
 		});
 	}
 
@@ -32,7 +32,7 @@ export default class GuildDatabase extends GD_Base {
 		try {
 			await GuildSchema.findOneAndDelete({ guildID: guild.id });
 		} catch (e) {
-			error(`[Database > Guild Removal] An error has occured while removing the data: \n${e}`);
+			Error(`[Database > Guild Removal] An error has occured while removing the data: \n${e}`);
 		}
 	}
 
@@ -58,7 +58,7 @@ export default class GuildDatabase extends GD_Base {
 		if (checkDisabled(guild.client, this.caller.name, true)) return;
 		if (typeof settings !== 'object')
 		{
-			error('[Guild Update] The setting passed in is not an object.');
+			Error('[Guild Update] The setting passed in is not an object.');
 			return;
 		}
 		const data = await this.get(guild);
@@ -97,7 +97,7 @@ function checkDisabled(client: Sayumi, caller?: string, warn = false): boolean
 {
 	if (client.Database.disabled)
 	{
-		if (warn) client.Log.warn(`[Sayumi] Offline mode is enabled. You received this message because you have invoked a database methood.\n Invoked method: '${caller}'`);
+		if (warn) Warn(`[Sayumi] Offline mode is enabled. You received this message because you have invoked a database methood.\n Invoked method: '${caller}'`);
 		return true;
 	}
 	return false;

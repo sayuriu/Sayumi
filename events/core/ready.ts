@@ -12,7 +12,7 @@ export = {
 			try {
 				client.user.setActivity(client.Methods.Common.GetRandomize(statuses), { type: 'WATCHING' });
 			} catch (error: any) {
-				return client.Log.error(`[Discord > ClientPresence] \n${error.message}`);
+				return client.Log.Error(`[Discord > ClientPresence] \n${error.message}`);
 			}
 		}, 900000);
 	},

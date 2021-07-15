@@ -1,3 +1,4 @@
+/* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-empty-interface */
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-namespace */
@@ -15,11 +16,9 @@ import {
 	Client as DSClient,
 	ClientOptions,
 	Collection,
-	Channel,
 	IntentsString,
 	Message,
-	MessageEmbed,
-	User,
+	TextChannel,
 } from 'discord.js';
 import { Player as MusicPlayer, PlayerOptions } from 'discord-player';
 import chalk from 'chalk';
@@ -27,41 +26,38 @@ import { watch, stat, readFileSync } from 'fs';
 import { join } from 'path';
 import { Types } from 'mongoose';
 
-import logCarrier, { error, bootstrap, debug, info, warn } from './Logger';
+import logCarrier, { Error, bootstrap, Debug, Inform, Warn } from './Logger';
+import Database from './Database';
+import EmbedConstructor from './Embeds';
+import Methods from './Methods';
+import Loader, { IssueWarns, ParseCheck } from './Loader';
+
 import AFKUser from './interfaces/AFKUser';
 import Sayumi_Command from './interfaces/Command';
+import Sayumi_Event from './interfaces/Event';
 import Command_Group from './interfaces/CmdGroup';
 import { DatabaseInitOption } from './interfaces/DatabaseInitOption';
 import GuildData from './interfaces/GuildData';
-import Database from './Database';
-import Methods from './Methods';
-import Loader, { IssueWarns, ParseCheck } from './Loader';
+
 import GuildDatabase from './database/methods/GuildActions';
 import ClientBootstrap from './database/models/client_bootstrap';
-import Sayumi_Event from './interfaces/Event';
-import EmbedConstructor from './Embeds';
+import EvalRenderer from './Eval';
 
 const DefaultIntents: IntentsString[] = [
 	'GUILDS',
 	'GUILD_EMOJIS',
-	'GUILD_INTEGRATIONS',
 	'GUILD_INVITES',
 	'GUILD_MEMBERS',
 	'GUILD_MESSAGES',
 	'GUILD_MESSAGE_REACTIONS',
-	'GUILD_MESSAGE_TYPING',
-	'GUILD_PRESENCES',
 	'GUILD_VOICE_STATES',
-	'GUILD_WEBHOOKS',
 ];
-
-const red = (message: string) => chalk.hex('#E73B3B')(message);
 
 export default class Sayumi extends DSClient implements Sayumi_BaseClient
 {
 	// #region Define
 	readonly ROOT_DIR = `${__dirname}\\..`;
-	readonly master = process.env.MASTER;
+	readonly master = process.env.MASTER ?? null;
 	public HANDLED_EVENTS = 0;
 	public CommandList = new Collection<string, Sayumi_Command>();
 	public CommandAliases = new Collection<string[], string>();
@@ -70,7 +66,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 	public Cooldowns = new Collection<string, Collection<string, number>>();
 
 	public CachedGuildSettings = new Collection<string, GuildData>();
-	public EvalSessions = new Collection<string, EvalSession>();
+	public EvalSessions = new Collection<string, EvalRenderer>();
 	public AFKUsers = new Collection<string, AFKUser>();
 
 	public MusicPlayer: MusicPlayer;
@@ -82,14 +78,14 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 
 	public Methods = Methods;
 	public Log = Object.assign(logCarrier, {
-		error,
-		debug,
-		info,
-		warn,
+		Error,
+		Debug,
+		Inform,
+		Warn,
 	})
 
-	private cmdDir: string;
-	private evtDir: string;
+	public cmdDir: string;
+	public evtDir: string;
 	private _bugChannelID: string;
 	get DefaultMusicPlayerSettings(): ExtMusicPlayerOptions {
 		return {
@@ -106,14 +102,14 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		};
 	}
 	// #endregion
-
-	constructor({ core, DSBotOptions, databaseOptions }: Sayumi_BotClientConfig)
+	constructor(readonly config: Sayumi_BotClientConfig)
 	{
+		let { core, DSBotOptions, databaseOptions } = config;
 		console.clear();
 		bootstrap();
 		if (!DSBotOptions?.intents)
 		{
-			warn([
+			Warn([
 				'[Sayumi] Missing intents in client configuration. Those will be applied to ensure minimum functionality.',
 				chalk.hex('#9AA83A')(DefaultIntents.map(i => `  ${i}`).join('\n')),
 				'You can overwrite this configuration by specifying intents via ' + chalk.hex('#9872A2')('DSBotOptions.intents') + ' property in class contructor.',
@@ -139,10 +135,10 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		// To skip tsc compile logs
 		this.setTimeout(() => this.WatchDog(this.ROOT_DIR), 6000);
 
-		if (!databaseOptions) info(`[Database] Offline mode is active. Calling any methods under '${chalk.hex('#2186FA')('<client>')}.${red('Database')}' will raise an ${red('error')}.\nReason: Database initiate option was not specified.`);
 		this.Database = Object.assign(new Database(databaseOptions), { Guild: GuildDatabase });
 	}
 
+	// #region Methods
 	/** Initiates the event listener. */
 	private EventListener(): void
 	{
@@ -159,10 +155,10 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
     private HandleProcessErrors(): void
     {
         process.on("uncaughtException", err => {
-            error(`[Uncaught Exception] ${err.message}\n${err.stack}`);
+            Error(`[Uncaught Exception] ${err.message}\n${err.stack}`);
         });
         process.on("unhandledRejection", (err: Error) => {
-            error(`[Unhandled Promise Rejection] ${err.message}\n${err.stack}`);
+            Error(`[Unhandled Promise Rejection] ${err.message}\n${err.stack}`);
         });
         process.on('exit', code => {
             logCarrier(`status ${code}`, `Process instance has exited with code ${code}.`);
@@ -177,14 +173,21 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 			if (filename)
 			{
 				const path = join(rootDir, filename);
+
+				// hardcoded: disk/folder/bot
 				const printCSLPath = path.split('\\').splice(3, path.split('\\').length).join('\\');
+
 				const { resolve } = require;
 				const file = path.split('\\')[path.split('\\').length - 1];
 
 				const print_change = (cmdOrEvt: Sayumi_Command | Sayumi_Event | Record<string, any>) => {
-                    Object.keys(cmdOrEvt).length ?
-                    debug(`[Reload > ud] Updated ${cmdOrEvt.name || 'something at'} [${printCSLPath.split('\\').join(' > ')}]`) :
-                    debug(`[Reload > rg] Registered ${cmdOrEvt.name  || 'something at'} [${printCSLPath.split('\\').join(' > ')}]`);
+					if (!FSEventTimeout.get(path))
+					{
+						Object.keys(cmdOrEvt).length ?
+							Debug(`[Reload > ud] Updated ${cmdOrEvt.name || 'something at'} [${printCSLPath.split('\\').join(' > ')}]`) :
+							Debug(`[Reload > rg] Registered ${cmdOrEvt.name  || 'something at'} [${printCSLPath.split('\\').join(' > ')}]`);
+						timeout(path);
+					}
                 };
 
 				const exePath = (path.match(/executables/g) || []).length > 0;
@@ -194,64 +197,71 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 				{
 					stat(filename, (e, stats) => {
 
-						if (e) error(`[Reload - FileStats error] Path: ${path}\n${e.message}`);
-						if (!FSEventTimeout.get(path))
-                        {
-                            if (file.endsWith('.js'))
-                            {
-                                if (path.match(/node_modules/g)) return 'ignore node_modules dir';
-                                if (path.match(/^(\.git)/g)) return 'ignore git dir';
+						if (e) handleErrors(e, path);
+						if (file.endsWith('.js'))
+						{
+							if (path.match(/node_modules/g)) return 'ignore node_modules dir';
+							if (path.match(/^(\.git)/g)) return 'ignore git dir';
 
-                                let cmd: Record<string, any>;
-                                try {
-                                    cmd = exePath ? this.CommandList.get(require(path).name) || {} : {};
-                                } catch (err) {
-                                    cmd = {};
-                                }
+							let cmd: Record<string, any>;
+							try {
+								cmd = exePath ? this.CommandList.get(require(path).name) || {} : {};
+							} catch (err) {
+								cmd = {};
+							}
 
-                                if (stats.mtimeMs > (cmd.loadTime || 0) && (exePath || evtPath))
-                                {
-                                    const dirIndex = { invalidNames: [], emptyFiles: [], noFunc: [], errored: [] };
-                                    if (exePath)
-                                    {
-                                        if ((cmd.memWeight || 0) === stats.size) return;
-                                        delete require.cache[resolve(path)];
-                                        ParseCheck('cmd', this, path, dirIndex);
-                                        print_change(cmd);
-                                        IssueWarns(dirIndex, 'cmd');
-                                    }
-                                    if (evtPath)
-                                    {
-                                        delete require.cache[resolve(path)];
-                                        ParseCheck('evt', this, path, dirIndex);
-                                        this.HANDLED_EVENTS--;
+							const options = {
+								asAbsolute: true,
+								hotReload: true,
+							};
 
-                                        let obj;
-                                        try {
-                                            obj = require(path);
-                                        }
-                                        catch (err) { null; }
+							if (stats.mtimeMs > (cmd.loadTime || 0) && (exePath || evtPath))
+							{
+								const data = { dirIndex: { invalidNames: [], emptyFiles: [], noFunc: [], errored: [] } };
+								if (exePath)
+								{
+									const resolved = resolve(path);
+									delete require.cache[resolve(path)];
+									ParseCheck('cmd', this, path, data, options);
+									print_change(cmd);
+									IssueWarns(data.dirIndex, 'cmd');
+								}
+								if (evtPath)
+								{
+									delete require.cache[resolve(path)];
+									ParseCheck('evt', this, path, data, options);
+									this.HANDLED_EVENTS--;
 
-                                        print_change(obj || {});
-                                        IssueWarns(dirIndex, 'evt');
-                                    }
-                                }
-                                else debug(`[Reload > ld] Updated: "${printCSLPath}"`);
-                                timeout(path);
-                            }
+									let obj: Record<string, any>;
+									try {
+										obj = require(path);
+									}
+									catch (err) { null; }
 
-                            'only scans utils/json folder';
-                            if (file.endsWith('.json') && path.split('\\').some(n => n === 'json'))
-                            {
-                                // deal with CommandCategories
-                                const object = require(path);
-                                object;
-                                if (stats.mtimeMs > (object.lastUpdated || 0))
-                                {
-                                    // do something here, or do we actually need to do it?
-                                }
-                            }
-                        }
+									print_change(obj || {});
+									IssueWarns(data.dirIndex, 'evt');
+								}
+								return;
+							}
+							else if (!FSEventTimeout.get(path))
+							{
+								Debug(`[Reload > ld] Updated: "${printCSLPath}"`);
+								timeout(path);
+							}
+						}
+
+						'only scans utils/json folder';
+						if (file.endsWith('.json') && path.split('\\').some(n => n === 'json'))
+						{
+							// deal with CommandCategories
+							const object = require(path);
+							object;
+							if (stats.mtimeMs > (object.lastUpdated || 0))
+							{
+								// do something here, or do we actually need to do it?
+							}
+						}
+
 					});
 				}
 
@@ -266,17 +276,17 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
                             {
                                 const cmd = this.CommandList.get(require(path).name) || { name: null };
                                 ParseCheck('cmd', this, path, dirIndex);
-                                debug(`[Reload > ad] Registered ${cmd.name  || 'something at'} ${printCSLPath}`);
+                                Debug(`[Reload > ad] Registered ${cmd.name  || 'something at'} ${printCSLPath}`);
                                 IssueWarns(dirIndex, 'cmd');
                             }
                             if (evtPath)
                             {
                                 ParseCheck('cmd', this, path, dirIndex);
-                                debug(`[Reload > ad] Registered ${`"${require(path).name || 'something'}" at`} ${printCSLPath}`);
+                                Debug(`[Reload > ad] Registered ${`"${require(path).name || 'something'}" at`} ${printCSLPath}`);
                                 IssueWarns(dirIndex, 'evt');
                             }
                         }
-                        else debug(`[Reload > ad] Added "${printCSLPath}"`);
+                        else Debug(`[Reload > ad] Added "${printCSLPath}"`);
                     } catch (err) {
                         // ln 150: do something? [disable entry, etc etc...]
                         // if (cache(resolve(path))) null;
@@ -293,9 +303,9 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
             const PrintCSLPath = reqPath.split('\\').splice(3, reqPath.split('\\').length).join('\\');
             switch (err.code)
             {
-                case 'ENOENT': return debug(`[Reload > del] Removed: "${join(PrintCSLPath)}"`);
+                case 'ENOENT': return Debug(`[Reload > del] Removed: "${join(PrintCSLPath)}"`);
                 case 'EISDIR': return;
-                default: return error(`[Reload / ${err.syscall || err.name || 'Error'}] ${err}`);
+                default: return Error(`[Reload / ${err.syscall || err.name || 'Error'}] ${err}`);
             }
         };
 
@@ -323,10 +333,16 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 			cachedGuilds: this.guilds.cache.size,
 		})
 		.save({}, (err) => {
-			if (err) return error(`[Database > Client Init Sync] ${err}`);
+			if (err) return Error(`[Database > Client Init Sync] ${err}`);
 		});
 		return;
 	}
+
+	public BugReport(message: Message, eMessage: string): void
+	{
+		if (this._bugChannelID) return void (this.channels.cache.find(ch => ch.id === this._bugChannelID) as TextChannel)?.send({ embeds: [this.Embeds.error(message, eMessage)] });
+	}
+	// #endregion
 }
 
 abstract class Sayumi_BaseClient
@@ -335,7 +351,7 @@ abstract class Sayumi_BaseClient
 	CommandList: Collection<string, Sayumi_Command>;
 	CommandAliases: Collection<string[], string>;
 	CommandCategories: Collection<string, Command_Group>;
-	EvalSessions: Collection<string, EvalSession>;
+	EvalSessions: Collection<string, EvalRenderer>;
 
 	CachedGuildSettings: Collection<string, GuildData>;
 	AFKUsers: Collection<string, AFKUser>;
@@ -356,49 +372,11 @@ interface Sayumi_BotClientConfig
 {
 	core: {
 		token: string;
-		evtFolder: string;
-		cmdFolder: string;
+		evtFolder?: string;
+		cmdFolder?: string;
 		bugChannelID?: string;
 		MusicPlayerOptions?: ExtMusicPlayerOptions;
 	}
 	DSBotOptions?: ClientOptions;
 	databaseOptions?: DatabaseInitOption;
-}
-
-abstract class EvalSession
-{
-	header: Message | null;
-	readonly mainInstanceUserID: string;
-	readonly InstanceID: string;
-	readonly listenerChannel: Channel;
-	readonly prefix: string;
-	readonly sessionActiveString: string;
-	readonly sessionDestroyedString: string;
-
-	private _embed: MessageEmbed | null;
-	private lastInput: Collection<string, Message>;
-	private exceedBoolean: boolean;
-	private outputWindows: Message[] | [];
-	private flagArray: string[] | [];
-	private diffTime: number;
-
-	output: string | null;
-	outputRaw: string | null;
-	outputType: string | null;
-
-	message: Message;
-	destroyed: boolean;
-	input: string;
-
-	reactionFilter: (reaction: string, user: User) => boolean;
-	userFilter: (user: User) => boolean;
-
-	listener: () => Promise<void>;
-	updateMainInstance: () => void;
-	generateEmbeds: () => void;
-	clearWindows: () => void;
-	updateState: () => Promise<void>;
-	resetState: () => void;
-	destroy: () => void;
-	resetUI: () => void;
 }

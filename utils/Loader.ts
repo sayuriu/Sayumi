@@ -115,13 +115,20 @@ export default class Loader extends Loader_Base
 	}
 }
 
-export function ParseCheck(type: AllowedTypes, client: Client, path: string, data: any): number
+interface ParseOptions
+{
+	asAbsolute?: boolean;
+	hotReload?: boolean;
+}
+
+export function ParseCheck(type: AllowedTypes, client: Client, path: string, data: any, options: ParseOptions = { asAbsolute: false }): number
 {
 	const { invalidNames, emptyFiles, noFunc, errored } = data.dirIndex ?? { invalidNames: [], emptyFiles: [], noFunc: [], errored: [] };
+	const { asAbsolute, hotReload } = options;
 
 	try
 	{
-		let object = require(require.resolve(`.\\..\\${path}`));
+		let object = require(asAbsolute ? path : require.resolve(`.\\..\\${path}`));
 
 		const size = statSync(path).size;
 		const { name } = object;
@@ -189,6 +196,7 @@ export function ParseCheck(type: AllowedTypes, client: Client, path: string, dat
 
 	} catch (e) {
 		errored.push(e);
+		if (hotReload) client.Log.Warn(`[Reload] Failed to load ${path.split('\\').splice(3, path.split('\\').length).join('\\')}:\n${e}`);
 	}
 	return 0;
 }
@@ -214,7 +222,6 @@ export function IssueWarns(dirIndex: DirIndex, type: AllowedTypes | string): boo
     {
         const map = new Map<string, string[][]>();
         errored.forEach(e => ParseError(e, map));
-		console.log(errored);
 
         if (!map.size) return process.stdout.write(`An ${chalk.hex('#d13636')(`error`)} has been detected while loading assets. Please attach breakpoints on this function next time to track down.\n`);
         process.stdout.write(`Those files had ${chalk.hex('#d13636')(`errors`)} while compiling and skipped:\n`);
@@ -372,7 +379,7 @@ import Command_Group from './interfaces/CmdGroup';
 import { Player as MusicPlayer, PlayerEvents } from 'discord-player';
 import Methods from './Methods';
 
-interface Client extends NodeJS.EventEmitter
+interface Client extends Sayumi
 {
 	ROOT_DIR: string;
 	HANDLED_EVENTS: number;

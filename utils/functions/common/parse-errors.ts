@@ -12,7 +12,7 @@ function ParseSyntaxError(error: SyntaxError, map: Map<string, string[][]>)
 	stack.forEach((e: string) => acc = acc.concat(e.split('\t')));
 
 	acc.forEach(a => {
-		if (!a.trim() || a.trim() === a.match(/\^+/g)[0]) return;
+		if (!a.trim() || a.trim() === (a.match(/\^+/g) || [])[0]) return;
 		out.push(a.trim());
 	});
 
