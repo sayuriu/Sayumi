@@ -1,6 +1,7 @@
 node_modules
 .env
 .vscode
+.vs
 package-lock.json
 **/*.js
 **/*.js.map

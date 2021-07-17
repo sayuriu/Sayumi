@@ -311,21 +311,21 @@ function BindCategory(client: Client)
 	for (const category in CategoryList)
 	{
 		const target = CategoryList[category];
-		client.CategoryCompare.set(target.name, target.keywords);
+		if (!['lastUpdated', 'default'].includes(category)) client.CategoryCompare.set(target.name, target.keywords);
 	}
 
 	// Get all category entries
 	client.CommandList.forEach(commandObject => {
-		if (Array.isArray(commandObject.groups))
-		{
-			commandObject.groups.forEach(element => {
-				if (!groupArray.some(item => item === element)) groupArray.push(element);
-			});
-		}
+		commandObject.groups?.forEach(element => {
+			if (!groupArray.some(item => item === element)) groupArray.push(element);
+		});
 
-		let AssignedGroup: string[] | string = commandObject.groups;
-		if (!AssignedGroup) AssignedGroup = 'Unassigned';
-		if (!groupArray.some(item => item === AssignedGroup)) groupArray.push(...AssignedGroup);
+		let AssignedGroup: string[] = commandObject.groups;
+		if (!AssignedGroup) AssignedGroup = ['Unassigned'];
+		for (const group of AssignedGroup)
+		{
+			if (!groupArray.some(item => item === group)) groupArray.push(group);
+		}
 	});
 
 	const odd: string[] = [];
@@ -336,7 +336,7 @@ function BindCategory(client: Client)
 	});
 
 	if (odd.length) odd.forEach(element => {
-		if (Array.isArray(element)) return;
+		if (Array.isArray(element) || element === 'default') return;
 		CategoryList[element] = {
 			name: element,
 			description: 'No description available yet!',
@@ -347,7 +347,7 @@ function BindCategory(client: Client)
 
 	// Now, for each command object...
 	groupArray.forEach(group => {
-		if (Array.isArray(group)) return;
+		if (Array.isArray(group) || group === 'default') return;
 		const commandArray: string[] = [];
 		const underDevArray: string[] = [];
 
@@ -371,6 +371,8 @@ function BindCategory(client: Client)
 	});
 
 	CategoryList.lastUpdated = Date.now();
+	// against default import
+	CategoryList.default = null;
 	writeFileSync('./utils/json/Categories.json', JSON.stringify(CategoryList, null, 4));
 }
 

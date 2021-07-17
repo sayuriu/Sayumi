@@ -1,6 +1,6 @@
 {
 	"name": "sayumi",
-	"version": "1.32.23b723",
+	"version": "1.34.12b341",
 	"description": "Sayumi, rewritten in TypeScript.",
 	"main": "main",
 	"scripts": {

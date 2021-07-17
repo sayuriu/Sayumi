@@ -41,7 +41,7 @@ import GuildData from './interfaces/GuildData';
 
 import GuildDatabase from './database/methods/GuildActions';
 import ClientBootstrap from './database/models/client_bootstrap';
-import EvalRenderer from './Eval';
+import EvalInstance from './Eval';
 
 const DefaultIntents: IntentsString[] = [
 	'GUILDS',
@@ -53,11 +53,66 @@ const DefaultIntents: IntentsString[] = [
 	'GUILD_VOICE_STATES',
 ];
 
+interface ExtMusicPlayerOptions extends PlayerOptions
+{
+	enableLive?: boolean;
+	fetchBeforeQueued?: boolean;
+	leaveOnEndCooldown?: number;
+}
+
+interface Sayumi_BotClientConfig
+{
+	core: {
+		token: string;
+		evtFolder?: string;
+		cmdFolder?: string;
+		bugChannelID?: string;
+		MusicPlayerOptions?: ExtMusicPlayerOptions;
+	}
+	DSBotOptions?: ClientOptions;
+	databaseOptions?: DatabaseInitOption;
+}
+
+abstract class Sayumi_BaseClient
+{
+	readonly ROOT_DIR: string;
+	CommandList: Collection<string, Sayumi_Command>;
+	CommandAliases: Collection<string[], string>;
+	CommandCategories: Collection<string, Command_Group>;
+	EvalSessions: Collection<string, EvalInstance>;
+
+	CachedGuildSettings: Collection<string, GuildData>;
+	AFKUsers: Collection<string, AFKUser>;
+	Database: Database & {
+		Guild: typeof GuildDatabase;
+	}
+	[key: string]: any;
+}
+
+
 export default class Sayumi extends DSClient implements Sayumi_BaseClient
 {
 	// #region Define
-	readonly ROOT_DIR = `${__dirname}\\..`;
-	readonly master = process.env.MASTER ?? null;
+	public readonly ROOT_DIR = `${__dirname}\\..`;
+	public readonly master = process.env.MASTER ?? null;
+	public readonly Embeds = EmbedConstructor;
+	public readonly Methods = Methods;
+
+	public readonly Database: Database & {
+		Guild: typeof GuildDatabase,
+	};
+
+	public readonly Log = Object.assign(logCarrier, {
+		Error,
+		Debug,
+		Inform,
+		Warn,
+	});
+
+	public readonly cmdDir: string;
+	public readonly evtDir: string;
+	private readonly _bugChannelID: string;
+
 	public HANDLED_EVENTS = 0;
 	public CommandList = new Collection<string, Sayumi_Command>();
 	public CommandAliases = new Collection<string[], string>();
@@ -66,27 +121,11 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 	public Cooldowns = new Collection<string, Collection<string, number>>();
 
 	public CachedGuildSettings = new Collection<string, GuildData>();
-	public EvalSessions = new Collection<string, EvalRenderer>();
+	public EvalSessions = new Collection<string, EvalInstance>();
 	public AFKUsers = new Collection<string, AFKUser>();
 
 	public MusicPlayer: MusicPlayer;
-	public Embeds = EmbedConstructor;
 
-	public Database: Database & {
-		Guild: typeof GuildDatabase,
-	}
-
-	public Methods = Methods;
-	public Log = Object.assign(logCarrier, {
-		Error,
-		Debug,
-		Inform,
-		Warn,
-	})
-
-	public cmdDir: string;
-	public evtDir: string;
-	private _bugChannelID: string;
 	get DefaultMusicPlayerSettings(): ExtMusicPlayerOptions {
 		return {
 			enableLive: true,
@@ -343,40 +382,4 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		if (this._bugChannelID) return void (this.channels.cache.find(ch => ch.id === this._bugChannelID) as TextChannel)?.send({ embeds: [this.Embeds.error(message, eMessage)] });
 	}
 	// #endregion
-}
-
-abstract class Sayumi_BaseClient
-{
-	readonly ROOT_DIR: string;
-	CommandList: Collection<string, Sayumi_Command>;
-	CommandAliases: Collection<string[], string>;
-	CommandCategories: Collection<string, Command_Group>;
-	EvalSessions: Collection<string, EvalRenderer>;
-
-	CachedGuildSettings: Collection<string, GuildData>;
-	AFKUsers: Collection<string, AFKUser>;
-	Database: Database & {
-		Guild: typeof GuildDatabase;
-	}
-	[key: string]: any;
-}
-
-interface ExtMusicPlayerOptions extends PlayerOptions
-{
-	enableLive?: boolean;
-	fetchBeforeQueued?: boolean;
-	leaveOnEndCooldown?: number;
-}
-
-interface Sayumi_BotClientConfig
-{
-	core: {
-		token: string;
-		evtFolder?: string;
-		cmdFolder?: string;
-		bugChannelID?: string;
-		MusicPlayerOptions?: ExtMusicPlayerOptions;
-	}
-	DSBotOptions?: ClientOptions;
-	databaseOptions?: DatabaseInitOption;
 }

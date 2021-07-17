@@ -1,338 +1,368 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import beautify from "beautify";
-import { Channel, Collection, User, MessageEmbed as EmbedConstructor, MessageReaction, Message, TextChannel, NewsChannel, ThreadChannel, DMChannel, MessageEmbed, MessageAttachment } from "discord.js";
-import { readFileSync, writeFileSync } from "fs";
-import { inspect } from "util";
-import Sayumi from "./Client";
-import { ExtMessage } from "./interfaces/extended/ExtMessage";
+import beautify from 'beautify';
+import { inspect } from 'util';
+import { readFileSync, writeFileSync } from 'fs';
+import { MessageAttachment, User, MessageReaction, MessageEmbed, TextChannel, Collection } from 'discord.js';
+import Sayumi from './Client';
+import { ExtMessage } from './interfaces/extended/ExtMessage';
 
+// TODO: use markdown instead
 const headerStringArray = [
-	'--------- [EVAL SESSION ACTIVE] \'${SID}\'',
+	'```css',
+	'/*# [eval] \'${SID}\' */',
 	'',
 	' - Type in expressions directly to execute.',
 	' - Flags can be included before the expression: [sh/ext/]',
 	' - Type -exit to cancel this session.',
 	' [NOTE: \'You cannot execute commands in the same channel until this session ends.\']',
+	'```',
 ];
-interface EvalInitData extends ExtMessage
+
+interface EvalInitConfig
 {
-	sessionID?: string;
-	input?: string;
-	prefix: string;
 	ReactionFilter: (reaction: MessageReaction, user: User) => boolean;
 	UserFilter: (user: User) => boolean;
 }
 
-type Flags = 'showExtended' | 'showHidden'
-type Inputs = Collection<`${bigint}`, Message>;
-
-
-interface EvalError
+type AllowedFlags = 'SHOW_HIDDEN' | 'SHOW_EXTENDED' | 'LOG'
+interface EvalStats
 {
-	name: string;
-	stack: string;
-	message: string;
+	input: string;
+	inputRaw: string;
+	output?: string;
+	outputRaw?: any;
+	outputType?: string;
+	error?: Error;
+	diffTime?: [number, number];
+	flags: AllowedFlags[];
+
+	// exports
+	file?: string;
+	jsonData?: string;
 }
 
-interface EvalResult
+export = class EvalInstance
 {
-	flags: Flags[];
-	diffTime: [number, number?];
-	output: string | EvalError;
-	outputType: string;
-	outputRaw: any;
-	fileName?: string;
-	filePath?: string;
-	writeData?: any;
-	exceedBoolean?: boolean;
-}
+	// #region Props
+	public readonly Prefix: string;
+	public readonly MainInstanceUserID: `${bigint}`;
+	public readonly InstanceID: string;
+	public readonly ReactionFilter: (reaction: MessageReaction, user: User) => boolean;
+	public readonly UserFilter: (user: User) => boolean;
 
-export default class EvalRenderer implements EvalResult
-{
-	flags: Flags[] = [];
-	diffTime: [number, number?];
-	output: string | EvalError;
-	outputType: string;
-	outputRaw: any;
-	fileName?: string;
-	filePath?: string;
-	writeData?: any;
-	exceedBoolean = false;
+	private readonly listenerChannel: TextChannel;
+	private outputWindows: ExtMessage[] = [];
+	private currentEmbed: MessageEmbed = null;
+	private header: ExtMessage;
+	private mainInstance: ExtMessage;
+	private currentMessage: ExtMessage;
+	// #endregion
 
-	private header: ExtMessage | null;
-	private mainEmbedInstance: ExtMessage;
-	private mainInstanceUserID: `${bigint}`;
-	public InstanceID: string;
-	private listenerChannel: TextChannel | DMChannel;
-	private destroyed = false;
-	private outputWindows: ExtMessage[];
-	private input: string;
-	private ReactionFilter: (reaction: MessageReaction, user: User) => boolean;
-	private UserFilter: (user: User) => boolean;
-	private _embed: null | MessageEmbed;
-	private lastInput: Inputs;
-	private prefix: string;
+	// #region EvalStats
+	private evalStatus: EvalStats = {
+		input: null,
+		inputRaw: null,
+		flags: [],
+	};
+	// #endregion
 
-	private a = -1;
-	private sessionActiveString: string;
-	private sessionDestroyedString: string;
-
-	constructor(private config: EvalInitData)
+	get MainInstanceMessageID(): string
 	{
-		this.mainInstanceUserID = config.author.id;
-		this.InstanceID = config.sessionID;
-		this.listenerChannel = (config.channel as TextChannel | DMChannel);
-		this.outputWindows = [];
-		this.input = config.content.slice(config.prefix.length);
-		this.ReactionFilter = config.ReactionFilter;
-		this.UserFilter = config.UserFilter;
-		this._embed;
-		this.lastInput;
-		this.prefix = config.prefix;
-
-		this.sessionActiveString = `\`\`\`css\n${headerStringArray.join('\n')
-				.replace(/\n/g, () => {
-					this.a++;
-					if (this.a === 0) return '\n';
-					return `\n0${this.a} `;
-				})
-				.replace(/\${SID}/g, '0x' + this.InstanceID)}\`\`\``;
-		this.sessionDestroyedString = '```\nThis session is destroyed. No input will be taken until you start a new one.```';
+		return this.mainInstance.id;
 	}
 
-	start(): void
+	constructor(message: ExtMessage, config: EvalInitConfig)
 	{
-		void this.config.delete();
-		void this.updateState();
+		this.ReactionFilter = config.ReactionFilter;
+		this.UserFilter = config.UserFilter;
+		this.InstanceID = EvalInstance.getSessionsID(message.author.id, message.channel.id);
 
-		if (this.input.replace(/\s+/g, '') === '') this.resetUI('<Awaiting input...>');
+		this.Prefix = message.prefixCall;
+		this.MainInstanceUserID = message.author.id;
+
+		this.listenerChannel = message.channel as TextChannel;
+		this.evalStatus.inputRaw = message.content.slice(message.prefixCall.length + 5);
+		this.currentMessage = message;
+	}
+
+	public start(message: ExtMessage): void
+	{
+		void message.delete().catch(() => null);
+		this.updateState();
+
+		if (!this.evalStatus.inputRaw.replace(/\s+/g, '')) this.blankEmbed('<Awaiting input...>');
 		else this.generateEmbeds();
 
-		if (this._embed instanceof EmbedConstructor)
+		if (this.currentEmbed instanceof MessageEmbed)
 		{
-			void this.listenerChannel.send(this.sessionActiveString).then(m => this.header = m as ExtMessage);
-			void this.listenerChannel.send({ embeds: [this._embed] }).then(mainEmbed => {
+			void this.listenerChannel.send(headerStringArray.join('\n').replace('${SID}', this.InstanceID)).then(m => this.header = m as ExtMessage);
+			void this.listenerChannel.send({ embeds: [this.currentEmbed] })
+					.then(mainEmbed => {
+						if (this.evalStatus.flags.includes('SHOW_EXTENDED'))
+							void this.listenerChannel.send(`\`\`\`js\n${this.evalStatus.output}\`\`\`\u200b\`${this.evalStatus.outputType}\``)
+								.then(m => this.outputWindows.push(m as ExtMessage));
 
-				if (this.flags.some(f => f === 'showExtended')) void this.listenerChannel.send(`\`\`\`js\n${this.output}\`\`\`\u200b\`${this.outputType}\``).then(m => this.outputWindows.push(m as ExtMessage));
-				if (this.exceedBoolean && this.filePath) void this.listenerChannel.send({ files: [new MessageAttachment(readFileSync(this.filePath), `eval.json`)] }).then(m => {
-					this.outputWindows.push(m as ExtMessage);
-					this.exceedBoolean = false;
-				});
+						if (this.evalStatus.file)
+							void this.listenerChannel.send({ files: [new MessageAttachment(readFileSync(this.evalStatus.file), `eval.json`)] })
+								.then(m => {
+									this.outputWindows.push(m as ExtMessage);
+									this.evalStatus.file = null;
+									this.evalStatus.jsonData = null;
+								});
 
-				this.mainEmbedInstance = mainEmbed as ExtMessage;
-				void this.listener();
-			});
+						this.mainInstance = mainEmbed as ExtMessage;
+						void this.listener();
+					})
+					.catch(e => {
+						void this.listenerChannel.send('Eval instance failed to start.');
+						this.currentMessage.client.Log.Error(`[Eval] ${e}`);
+						return this.destroy();
+					});
 		}
 	}
 
-	// Main listener of this instance
-	async listener(): Promise<void>
+	private async listener(): Promise<void>
 	{
-		if (this.destroyed || this.mainEmbedInstance.deleted) return;
-		this.lastInput = await this.listenerChannel.awaitMessages({ filter: (m: ExtMessage) => m.author.id === this.mainInstanceUserID, max: 1, time: 0x7fffffff, errors: ['time'] }).catch(async error => {
-			return await this.listener();
-		}) as Inputs;
-		if (this.lastInput.first())
+		if (!this || this.mainInstance.deleted) return;
+
+		const collected = await this.listenerChannel
+			.awaitMessages({
+				filter: (message) => this.UserFilter(message.author),
+				max: 1,
+				time: 0x7fffffff,
+				errors: ['time'],
+			})
+			.catch(e => {
+				this.destroy((e as Error).toString().includes('time') ? 'Input timed out.' : null);
+			}) as Collection<`${bigint}`, ExtMessage>;
+
+		if (collected.first())
 		{
-			(this.config as ExtMessage) = this.lastInput.first() as ExtMessage;
-			void this.lastInput.first().delete();
+			this.currentMessage = collected.first();
+			void this.currentMessage.delete().catch(() => null);
+			if (this.currentMessage.content.toLowerCase().startsWith('-exit')) return this.destroy();
 
 			this.resetState();
 			this.clearWindows();
-			this.input = this.lastInput.first().content;
+			this.evalStatus.inputRaw = this.currentMessage.content;
 
-			if (this.input.toLowerCase().startsWith('-exit')) return this.destroyInstance();
-
-			await this.updateState();
+			this.updateState();
 			this.generateEmbeds();
 			this.updateMainInstance();
 
-			if (this.flags.some(f => f === 'showExtended')) void this.listenerChannel.send(`\`\`\`js\n${this.output}\`\`\`\u200b\`${this.outputType}\``).then(m => this.outputWindows.push(m as ExtMessage));
-			if (this.exceedBoolean && this.filePath)
+			if (this.evalStatus.flags.includes('SHOW_EXTENDED'))
+				this.listenerChannel.send(`\`\`\`js\n${this.evalStatus.output}\`\`\`\u200b\`${this.evalStatus.outputType}\``)
+				.then(m => this.outputWindows.push(m as ExtMessage))
+				.catch(() => {
+					this.blankEmbed('Failed to discplay extended window.');
+					this.updateMainInstance();
+					return;
+				});
+
+			if (this.evalStatus.file)
 			{
-				if (!(this.listenerChannel as TextChannel).permissionsFor(this.config.client.user.id).has('ATTACH_FILES'))
+				if (!this.listenerChannel.permissionsFor(this.currentMessage.client.user.id).has('ATTACH_FILES'))
 				{
-					const desc = this._embed.description ? this._embed.description + '\n' : '';
-					this._embed = new EmbedConstructor(Object.assign(
-						this._embed,
+					const desc = this.currentEmbed.description ? this.currentEmbed.description + '\n' : '';
+					this.currentEmbed = new MessageEmbed(Object.assign(
+						this.currentEmbed,
 						{ description: `${desc}'Couldn't send output file. Lacking permission.'` },
 					));
+					this.updateMainInstance();
 				}
-				else
-				{
-					void this.listenerChannel.send({ files: [new MessageAttachment(readFileSync(this.filePath), `eval.json`)] }).then(m => {
+				else void this.listenerChannel.send({ files: [new MessageAttachment(readFileSync(this.evalStatus.file), `eval.json`)] })
+					.then(m => {
 						this.outputWindows.push(m as ExtMessage);
-						this.exceedBoolean = false;
+						this.evalStatus.file = null;
+						this.evalStatus.jsonData = null;
 					});
-				}
 			}
 		}
 		return await this.listener();
 	}
 
-	updateMainInstance(): void
+	private updateMainInstance()
 	{
-		if (!this.mainEmbedInstance.deleted && this._embed) void this.mainEmbedInstance.edit({ embeds: [this._embed] });
+		if (!this.mainInstance?.deleted && this.currentEmbed)
+			void this.mainInstance.edit({ embeds: [this.currentEmbed] })
+			.catch(() => this.destroy());
+		return;
 	}
 
-	generateEmbeds(): void
+	private generateEmbeds()
 	{
-		const data = {
-			input: this.input,
-			result: this,
-			flags: this.flags,
-		};
-		if (this.outputType === 'error') this._embed = new TerminalEmbeds(data).ReturnError();
-		else this._embed = new TerminalEmbeds(data).ReturnSucess();
+		this.currentEmbed = this.evalStatus.outputType === 'error' ? TerminalEmbed.Error(this.evalStatus) : TerminalEmbed.Success(this.evalStatus);
+		return;
 	}
 
-	clearWindows(): void
+	private clearWindows()
 	{
 		this.outputWindows.forEach(inst => {
-			if (inst.deleted) return;
-			void inst.delete();
+			if (!inst.deleted && inst.deletable) void inst.delete().catch(() => null);
 			this.outputWindows.splice(this.outputWindows.indexOf(inst), 1);
 		});
-	}
-
-	async updateState(): Promise<void>
-	{
-		const data = {
-			message: this.config,
-			prefix: this.prefix,
-			rawInput: this.input,
-			flags: this.flags,
-		};
-		const newState = await new GeneralProcessing(data).run();
-		Object.assign(this, newState);
+		return;
 	}
 
 	resetState(): void
 	{
-		this.output = null;
-		this.outputRaw = null;
-		this.outputType = null;
-		this.flags = [];
-		this.diffTime = [0];
-		this._embed = null;
-	}
+		// unnecessary?
+		this.evalStatus.inputRaw = null;
+		this.evalStatus.input = null;
 
-	destroyInstance(): void
-	{
-		void this.header.edit(this.sessionDestroyedString);
-		this.resetUI('<destroyed session>');
-		this.updateMainInstance();
-		if (/\s(-%del|-%d)\s*/.exec(this.config.content))
-		{
-			setTimeout(() => {
-				void this.mainEmbedInstance.delete();
-				void this.header.delete();
-			}, 5000);
-		}
-		this.config.client.EvalSessions.delete(EvalRenderer.getSessionsID(this.config.author, this.config.channel));
-		this.destroyed = true;
+		this.evalStatus.output = null;
+		this.evalStatus.outputRaw = null;
+		this.evalStatus.outputType = null;
+		this.evalStatus.flags = [];
+		this.evalStatus.diffTime = [0, 0];
+		this.currentEmbed = null;
 		return;
 	}
 
-	resetUI(message: string): void
+	private updateState()
 	{
-		this._embed = new EmbedConstructor()
-							.setTitle('Terminal')
-							.setColor('#bdbdbd')
-							.addField('\u200b', `\`\`\`\n${message}\`\`\``);
+		const processor = new EvalProcessor(this.evalStatus, this.currentMessage);
+		this.evalStatus = processor.run();
+		processor.destroy();
+		return;
 	}
 
-	static getSessionsID(user: User, channel: Channel): string
+	public destroy(message?: string, force = false): void
 	{
-		return (parseInt(user.id) + parseInt(channel.id)).toString(16);
-	}
-}
+		if (!force)
+		{
+			void this.header?.edit(message ?? '```\nThis session is destroyed. No input will be taken.```').catch(() => null);
+			this.blankEmbed('<destroyed session>');
+			this.updateMainInstance();
+			if (/\s(-%del|-%d)\s*/.exec(this.currentMessage.content))
+			{
+				setTimeout(() => {
+					void this.mainInstance.delete();
+					void this.header.delete();
+				}, 5000);
+			}
+		}
+		this.currentMessage.client.EvalSessions.delete(EvalInstance.getSessionsID(this.MainInstanceUserID, this.listenerChannel.id));
 
-interface ProcessInputData
-{
-	message: ExtMessage;
-	prefix: string;
-	rawInput: string;
-	flags: Flags[];
-}
-
-class GeneralProcessing implements EvalResult
-{
-	input: string;
-	message: ExtMessage;
-	flags: Flags[];
-	rawInput: string;
-	prefix: string;
-
-	diffTime: [number, number?];
-	output: string | EvalError;
-	outputType: string;
-	outputRaw: any;
-	fileName?: string;
-	filePath?: string;
-	writeData?: any;
-	exceedBoolean?: boolean;
-
-	constructor(data: ProcessInputData)
-	{
-		Object.assign(this, data);
+		for (const key in this) delete this[key];
+		return;
 	}
 
-	run(): Promise<this>
+	static getSessionsID(userID: `${bigint}`, channelID: `${bigint}`): string
 	{
-		return new Promise((resolve, _) => {
-			this.input = this.processInput(this.rawInput);
-			Object.assign(this, this.execute(
-				this.input,
-				this.flags,
-				this.message,
-				this.message.client,
-			));
+		return (parseInt(userID) + parseInt(channelID)).toString(16);
+	}
 
-			this.outputCheck(this.message, this);
-			(this.output as string) = this.ErrorExport(this) as string;
-			return resolve(this);
+	blankEmbed(message: string): void
+	{
+		this.currentEmbed = new MessageEmbed({
+			title: 'Terminal',
+			color: '#BDBDBD',
+			fields: [{
+				name: '\u200b',
+				value: `\`\`\`\n${message}\`\`\``,
+			}],
 		});
+		return;
 	}
+}
 
-	private processInput(rawInput: string): string
+interface FlagRegExp
+{
+	"SHOW_HIDDEN": RegExp;
+	"SHOW_EXTENDED": RegExp,
+	"LOG": RegExp,
+	"DEPTH": RegExp,
+}
+
+// TODO: Add implementation for depth args
+class EvalProcessor
+{
+	private message: ExtMessage;
+	get FlagRegex()
 	{
-		let input =  rawInput;
-		const flag_showHidden = /\s*-(showHidden|showhidden|sh|SH)\s*/.exec(input);
-		const flag_showExt = /\s*-(ext|showExt)\s*/.exec(input);
-
-		if (flag_showHidden && flag_showHidden[0].length)
-		{
-			input = input.replace(/\s*-?(showHidden|showhidden|sh|SH)\s*/, '');
-			this.flags.push('showHidden');
-		}
-		if (flag_showExt && flag_showExt[0].length)
-		{
-			input = input.replace(/\s*-?(ext|showExt)\s*/, '');
-			this.flags.push('showExtended');
-		}
-
-		input = input.replace(/^`+(js)?/, '').replace(/`+$/, '');
-		return input;
+		return {
+			"SHOW_HIDDEN": /(-(-showHidden|-showhidden|sh|SH)\s){1}/,
+			"SHOW_EXTENDED": /(-(ext|-showExt)\s){1}/,
+			"LOG": /(-(-log|l)\s){1}/,
+			// tricky arg: do later
+			"DEPTH": /((-(d|-depth) \d+)\s){1}/,
+		};
 	}
 
-	// request feature: custom depth args input
-	private execute(input: string, flagArray: Flags[], message: ExtMessage, client: Sayumi, log = console.log)
+	get IllegalRegex()
+	{
+		return [
+			/(this\.)?message\.client\.token/g,
+			/process\.env/g,
+		];
+	}
+
+	constructor(private data: EvalStats, message: ExtMessage)
+	{
+		this.message = message;
+		null;
+	}
+
+	public run()
+	{
+		this.processInput();
+		this.execute(this.data.input, this.message, this.message.client, console.log);
+		this.outputCheck();
+		this.DataExport();
+		return this.data;
+	}
+
+	public destroy()
+	{
+		for (const key in this) delete this[key];
+		return;
+	}
+
+	private processInput()
+	{
+		let { inputRaw: input } = this.data;
+
+		for (const flag in this.FlagRegex)
+		{
+			if (this.FlagRegex[flag as keyof FlagRegExp].exec(input))
+			{
+				input = input.replace(this.FlagRegex[flag], '');
+				if (!this.data.flags.includes(flag as AllowedFlags)) this.data.flags.push(flag as AllowedFlags);
+			}
+		}
+		this.data.input = input.trim();
+		return;
+	}
+
+	private execute(input: string, message: ExtMessage, client: Sayumi, log = console.log)
 	{
 		try
 		{
-			if (illegalStrings(input.toLowerCase()))this.throw('FORBIDDEN', 'Illegal keywords / varibles found.');
-			if (input.startsWith(this.prefix)) this.throw('CONFLICTED_HEADER', 'Input started with this bot\'s prefix.');
+			if (this.IllegalInputTest(this.data.inputRaw.toLowerCase()))this.throw('FORBIDDEN', 'Illegal keywords / varibles found.');
+			if (input.startsWith(this.message.prefixCall)) this.throw('CONFLICTED_HEADER', 'Input started with this bot\'s prefix.');
+
+			const outputRaw: any = eval(input);
+			const output = inspect(
+						outputRaw,
+						this.data.flags.includes('SHOW_HIDDEN'),
+						2,
+						false,
+					);
+
+			if (this.data.flags.includes('LOG'))
+				this.message.client.Log('info', inspect(
+						outputRaw,
+						this.data.flags.includes('SHOW_HIDDEN'),
+						2,
+						true,
+					));
 
 			const startTime = process.hrtime();
-			const outputRaw: any = eval(input);
 			const diffTime = process.hrtime(startTime);
-			let outputType: string = (typeof outputRaw).toString();
-			//
-			const output = inspect(outputRaw, flagArray.some(f => f === 'showHidden'), 2, false);
 
-			if (outputType === 'undefined') outputType = 'statement?/unknown';
+			let outputType = (typeof outputRaw).toString();
 			outputType = outputType.replace(outputType.substr(0, 1), outputType.substr(0, 1).toUpperCase());
 
 			if (output.indexOf('{') > -1 && output.endsWith('}'))
@@ -346,84 +376,76 @@ class GeneralProcessing implements EvalResult
 				else outputType += `: ${header}`;
 			}
 
-			return { flags: flagArray, diffTime, output, outputType, outputRaw } as EvalResult;
+			this.data.error = null;
+			this.data.output = output;
+			this.data.outputRaw = outputRaw;
+			this.data.outputType = outputType;
+			this.data.diffTime = diffTime;
 
 		} catch (error) {
-			const { name, message: eMessage, stack } = error as Error;
-			return {
-				flags: flagArray,
-				diffTime: [0],
-				output: {
-					name,
-					stack: stack.substr(stack.indexOf('at '), stack.length),
-					message: eMessage,
-				},
-				outputType: 'error',
-				outputRaw: null,
-			} as EvalResult;
+			this.data.error = error as EvalError;
+			this.data.output = null;
+			this.data.outputRaw = null;
+			this.data.outputType = 'error';
+			this.data.diffTime = [0, 0];
 		}
 	}
 
-	private outputCheck(message: ExtMessage, data: EvalResult): void
+	private outputCheck()
 	{
-		if ((data.output as EvalError).stack) return;
-		if ((data.output as string).length > 1024)
+		if (this.data.error) return;
+		if (this.data.output.length > 1024)
 		{
 			let JSONObjectString: string;
 			try
 			{
-				JSONObjectString = JSON.stringify(data.outputRaw, null, 4);
+				JSONObjectString = JSON.stringify(this.data.outputRaw, null, 4);
 				if (JSONObjectString)
 				{
-					if (data.flags.some(f => f === 'showExtended') && JSONObjectString.length <= 2048) data.output = inspect(JSON.parse(JSONObjectString), false, null, false);
-					else if (JSONObjectString.length <= 1024) data.output = inspect(JSON.parse(JSONObjectString), false, null, false);
-					data.exceedBoolean = true;
+					if (this.data.flags.includes('SHOW_EXTENDED') && JSONObjectString.length <= 2048) this.data.output = inspect(JSON.parse(JSONObjectString), false, null, false);
+					else if (JSONObjectString.length <= 1024) this.data.output = inspect(JSON.parse(JSONObjectString), false, null, false);
 
-					this.DataExport(Object.assign(
-							data,
-							{ fileName: `${message.author.id}-${message.createdTimestamp}.json` },
-							{ writeData: JSONObjectString },
-					));
+					Object.assign(
+						this.data,
+						{ fileName: `${Math.round(Math.random() * Date.now() * 0x989680).toString(16)}.json` },
+						{ writeData: JSONObjectString },
+					);
+					this.DataExport();
 				}
-				else
-				{
-					data.flags.push('showExtended');
-					this.DataExport(data, true);
-				}
-			} catch(error) {
-				data.flags.push('showExtended');
-				this.DataExport(data, true);
+				else this.data.flags.push('SHOW_EXTENDED');
+
+			} catch(_) {
+				this.data.flags.push('SHOW_EXTENDED');
 			}
 		}
 	}
 
-	private DataExport(data: EvalResult, showExt = false)
+	private DataExport()
 	{
-		const { fileName = null, writeData = null } = data;
-		if (fileName && writeData)
+		const { file = null, jsonData = null } = this.data;
+		if (file && jsonData)
 		{
-			writeFileSync(`./temps/${fileName}`, writeData);
-			data.filePath = `./temps/${fileName}`;
+			writeFileSync(`temp/${file}.json`, jsonData);
+			this.data.file = `temp/${file}.json`;
 		}
-		data.output = data.output as string;
-		data.output = data.output.substr(0, data.output.substr(0, showExt ? 1956 : 1010).lastIndexOf('\n')) + '\n...';
+		if (this.data.output?.length >= 1024)
+		{
+			const showExt = this.data.flags.includes('SHOW_EXTENDED');
+			let indexOfLastNL: number;
+
+			if (showExt) indexOfLastNL = this.data.output.substr(0, 1956).lastIndexOf('\n');
+			else indexOfLastNL = this.data.output.substr(0, 1010).lastIndexOf('\n');
+			this.data.output = this.data.output.substr(0, indexOfLastNL) + '\n...';
+		}
 	}
 
-	private ErrorExport(data: EvalResult)
-	{
-		if (data.outputType !== 'error') return data;
-		(data.output as EvalError).stack = 'Hidden';
-		return inspect(JSON.parse(JSON.stringify(data, null, 4)), false, null, false);
-	}
-
-	private throw(name: string, message: string): void
+	private throw(name: string, message: string)
 	{
 		class BaseError extends Error {
-			name: string;
-			constructor(header: string, ...msg: string[])
+			constructor(header?: string, ...msg: string[])
 			{
 				super(...msg);
-				this.name = header || 'UNKNOWN_ERROR';
+				this.name = header ?? 'UNKNOWN_ERROR';
 				this.name = this.name.toUpperCase();
 
 				Error.captureStackTrace(this, BaseError);
@@ -431,56 +453,68 @@ class GeneralProcessing implements EvalResult
 		}
 		throw new BaseError(name, message);
 	}
+
+	private IllegalInputTest(input: string): boolean
+	{
+		for (const pattern of this.IllegalRegex)
+		{
+			if (pattern.exec(input)) return true;
+		}
+		return false;
+	}
 }
 
-interface EmbedConstructData
+class TerminalEmbed
 {
-	input: string;
-	result: EvalResult;
-	flags: Flags[];
-}
-
-class TerminalEmbeds
-{
-	constructor(private readonly data: EmbedConstructData)
+	static Success(result: EvalStats)
 	{
-		null;
+		const { diffTime, input, output, outputType, flags } = result;
+
+		return new MessageEmbed({
+			title: 'Terminal',
+			color: '#5ACC61',
+			fields: [
+				{
+					name: 'Input',
+					value: (flags.length ? `\`flags: ${flags.join(', ')}\`\n` : '') +
+					`\`\`\`js\n${beautify(input, { format: 'js' })}\n\`\`\``,
+				},
+				{
+					name: 'Output',
+					value: [
+						'```js',
+						flags.includes('SHOW_EXTENDED') ?
+							'The output is shown below.' :
+							(output.length > 1010 ? output.substr(0, output.substr(0, 1010).lastIndexOf('\n')) + '\n...' : output),
+						'\n```',
+					].join('\n'),
+				},
+			],
+			footer: {
+				text: `${flags.includes('SHOW_EXTENDED') ? `Executed in ${diffTime[0] ? `${diffTime}s` : ""}${diffTime[1] / 1000}ms` : `[${outputType}] | Executed in ${diffTime[0] ? `${diffTime}s` : ""}${diffTime[1] / 1000}ms`}`,
+			},
+			timestamp: Date.now(),
+		});
 	}
-	ReturnSucess()
+
+	static Error(result: EvalStats)
 	{
-		const { input, result: { diffTime, outputType, flags } } = this.data;
-		const showExt = flags.some(f => f === 'showExtended');
-		const output = this.data.result.output as string;
+		const { input, error } = result;
 
-		return new EmbedConstructor()
-				.setTitle('Terminal')
-				.setColor('#5acc61')
-				.addField('Input', `${flags.length ? `\`flags: ${flags.join(', ')}\`\n` : ''}\`\`\`js\n${beautify(input, { format: 'js' })}\n\`\`\``)
-				.addField('Output', `\`\`\`js\n${showExt ? 'The output is shown below.' : output.length > 1010 ? output.substr(0, output.substr(0, 1010).lastIndexOf('\n')) + '\n...' : output}\n\`\`\``)
-
-				.setFooter(`${showExt ? `Executed in ${diffTime[0] > 0 ? `${diffTime}s` : ""}${diffTime[1] / 1000}ms` : `[${outputType}] | Executed in ${diffTime[0] > 0 ? `${diffTime}s` : ""}${diffTime[1] / 1000000}ms`}`)
-				.setTimestamp();
+		return new MessageEmbed({
+			title: 'Terminal',
+			color: '#FA3628',
+			fields: [
+				{
+					name: 'Input',
+					value: `\`\`\`js\n${beautify(input, { format: 'js' })}\n\`\`\``,
+				},
+				{
+					name: `Error [${error.name ?? 'unknown'}]`,
+					value: `\`${error.message}\``,
+				},
+			],
+			timestamp: Date.now(),
+		});
 	}
-
-	ReturnError()
-	{
-		const { input } = this.data;
-		const { name, message } = this.data.result.output as EvalError;
-
-		return new EmbedConstructor()
-				.setTitle('Terminal')
-				.setColor('#fa3628')
-
-				.addField('Input', `\`\`\`js\n${beautify(input, { format: 'js' })}\n\`\`\``)
-				.addField('Error', `\`[${name}] ${message}\``)
-
-				.setTimestamp();
-	}
-}
-
-function illegalStrings(input: string): boolean {
-	const match = (reg: RegExp) => reg.exec(input);
-	if (match(/(this\.)?message\.client\.token/g)) return true;
-	if (match(/process\.env/)) return true;
-	return false;
 }

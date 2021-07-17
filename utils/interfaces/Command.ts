@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Message, PermissionString } from "discord.js";
+import { PermissionString } from "discord.js";
+import { ExtMessage } from "./extended/ExtMessage";
 import Sayumi from "../Client";
 
 /** All `[REQUIRED]` properties must be included for a command to load. */
@@ -50,7 +51,7 @@ interface Sayumi_Command
 	/** `[optional] Extra notes for this command.*/
 	notes?: string[];
 	/** `[REQUIRED]` The function which executes when this command is called. */
-	onTrigger: (client: Sayumi, message: Message, ...args: any[]) => void;
+	onTrigger: (client: Sayumi, message: ExtMessage, ...args: any[]) => void;
 
 	// Hidden
 	prompt?: boolean;
