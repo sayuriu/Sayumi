@@ -1,5 +1,7 @@
-/* eslint-disable @typescript-eslint/unbound-method */
 import { Message, Collection, TextChannel, NewsChannel, ThreadChannel } from "discord.js";
+import { joinVoiceChannel } from "@discordjs/voice";
+import { VoiceAdapterCreator } from "discord-player";
+import parseMS from 'parse-ms';
 import Sayumi from "../../utils/Client";
 
 import { commands } from '../../utils/json/Responses.json';
@@ -8,10 +10,6 @@ import GuildData from "../../utils/interfaces/GuildData";
 import AFKUser from "../../utils/interfaces/AFKUser";
 import { ExtMessage } from "../../utils/interfaces/extended/ExtMessage";
 import { ExtQueue } from "../../utils/interfaces/extended/ExtQueue";
-import { joinVoiceChannel } from "@discordjs/voice";
-import { VoiceAdapterCreator } from "discord-player";
-import { Error } from "mongoose";
-
 type GuildChannels = TextChannel | NewsChannel | ThreadChannel;
 type NonThreadChannels = TextChannel | NewsChannel;
 
@@ -19,11 +17,12 @@ export = {
 	name: 'messageCreate',
 	onEmit: async (client: Sayumi, message: ExtMessage): Promise<void> => {
 
-		const { channel: TextCH, reply } = message;
+		const { channel: TextCH } = message;
+
 		let prefix = DefaultGuildSettings.prefix;
 		let source: GuildData | typeof DefaultGuildSettings;
 		const mention_self = `<@!${client.user.id}>`;
-		const { Common: { GetRandomize } } = client.Methods;
+		const { Common: { GetRandomize }, Time: { FormatTime, TimestampToTime } } = client.Methods;
 
 		const SelfDeteleMsg = (m: Message, t: number) => {
 			setTimeout(() => {
@@ -71,12 +70,12 @@ export = {
 				if (userArray.length === 1)
 				{
 					const target = userArray[0];
-					const { hour, minute, second } = client.Methods.Time.TimestampToTime(Date.now() - target.AFKTimestamp);
+					const { hours, minutes, seconds } = TimestampToTime(Date.now() - target.AFKTimestamp);
 					let timeString = '';
 
-					if (hour) timeString = `${hour} hour${hour > 1 ? 's' : ''}`;
-					if (minute > 0 && !hour) timeString = `${minute} minute${minute > 1 ? 's' : ''}`;
-					if (second > 0 && !minute && !hour) timeString = 'Just now';
+					if (hours) timeString = `${hours} hour${hours > 1 ? 's' : ''}`;
+					if (minutes > 0 && !hours) timeString = `${minutes} minute${minutes > 1 ? 's' : ''}`;
+					if (seconds > 0 && !minutes && !hours) timeString = 'Just now';
 
 					void TextCH.send(`**${target.name}** is currently AFK${target.reason ? `: *${target.reason}*` : '.'} **\`[${timeString}]\`**`);
 					return;
@@ -142,62 +141,36 @@ export = {
 					}
 
 					// Sending guild-only commands through DMs
-					if (RequestedCommand.guildOnly && TextCH.type === 'DM') return void reply(GetRandomize(commands.problems.guild_only_invalid));
+					if (RequestedCommand.guildOnly && TextCH.type === 'DM') return void message.reply(GetRandomize(commands.problems.guild_only_invalid));
 
 					// Cooldowns (throttling)
 					const { Cooldowns } = client;
 					const now = Date.now();
 
 					if (!Cooldowns.has(RequestedCommand.name)) Cooldowns.set(RequestedCommand.name, new Collection());
+					const guildCooldowns = Cooldowns.get(RequestedCommand.name);
 
-					const timestamps = Cooldowns.get(RequestedCommand.name);
-					const cooldownAmount = (RequestedCommand.cooldown || 2) * 1000;
+					if (!guildCooldowns.has(message.guild.id)) guildCooldowns.set(message.guild.id, new Collection());
+
+					const timestamps = Cooldowns.get(RequestedCommand.name).get(message.guild.id);
+					const cooldownAmount = (RequestedCommand.cooldown ?? 3) * 1000;
 					const master = message.author.id === client.master;
 
-					// Guild cooldowns
-					if (RequestedCommand.guildCooldown && message.guild)
+					const cooldownTimestamp = timestamps.get(message.author.id);
+					if (cooldownTimestamp)
 					{
-						if (timestamps.has(message.guild.id))
+						const expirationTimestamp = cooldownTimestamp + cooldownAmount;
+
+						if (now < expirationTimestamp && message.channel.type !== 'DM')
 						{
-							const expirationTime = timestamps.get(message.guild.id) + cooldownAmount;
-
-							// @suggest: use while loop
-							if (now < expirationTime && !master)
-							{
-								const timeLeft = (expirationTime - now) / 1000;
-								return void reply(
-									GetRandomize([
-										// @flagged:needs-optimizations
-										`please wait ${timeLeft.toFixed(0)} second${ Math.floor(timeLeft) > 1 ? 's' : '' } before reusing`,
-										`please cool down! \`[${timeLeft.toFixed(0)} second${ Math.floor(timeLeft) > 1 ? 's' : '' }]\``,
-									]),
-								);
-							}
+							const timeLeft = (expirationTimestamp - now);
+							return void message.reply(`\`${RequestedCommand.name}\` is currently in cooldown \`[${FormatTime(parseMS(timeLeft))}]\``);
+							// return void message.reply(`Please wait ${timeLeft.toFixed(0)} second${ Math.floor(timeLeft) > 1 ? 's' : '' } before reusing the \`${RequestedCommand.name}\` command.`);
 						}
-
-						timestamps.set(message.guild.id, now);
-						setTimeout(() => timestamps.delete(message.guild.id), cooldownAmount);
 					}
 
-					// User cooldowns
-					else
-					{
-						if (timestamps.has(message.author.id))
-						{
-							const expirationTime = timestamps.get(message.author.id) + cooldownAmount;
-
-							if (now < expirationTime && TextCH.type !== 'DM' && !master)
-							{
-								const timeLeft = (expirationTime - now) / 1000;
-								return void reply(
-									`please wait ${timeLeft.toFixed(1)} second${ Math.floor(timeLeft) > 1 ? 's' : '' } before reusing the \`${RequestedCommand.name}\` command.`,
-								);
-							}
-						}
-
-						timestamps.set(message.author.id, now);
-						setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
-					}
+					timestamps.set(message.author.id, now);
+					setTimeout(() => timestamps.delete(message.author.id), cooldownAmount);
 
 					// If the command requires args... But the user doesn't includes many.
 					// Note: Added reqArgs for commands that specifically requires args.
@@ -307,15 +280,15 @@ export = {
 						}
 
 						if (RequestedCommand.terminal) return RequestedCommand.onTrigger(client, message, prefix);
-						if (RequestedCommand.args || RequestedCommand.reqArgs) return RequestedCommand.onTrigger(client, message, args);
+						if (RequestedCommand.args || RequestedCommand.reqArgs) return RequestedCommand.onTrigger(client, message, ...args);
 						return RequestedCommand.onTrigger(client, message);
 						// Catch errors
 					} catch (error) {
 						const { message: eMessage, stack: eStack } = (error as Error);
-						client.Log.Error(`[Command Execution] An error has occured while executing "${RequestedCommand.name}": \n${eMessage} \n${eStack ?? ''}`);
+						client.RaiseException(`[Command Execution] An error has occured while executing "${RequestedCommand.name}": \n${eMessage} \n${eStack ?? ''}`);
 						client.BugReport(message, eMessage.toString());
 						if (['DM', 'GUILD_TEXT'].includes(TextCH.type)) return void TextCH.send(GetRandomize(commands.error));
-						return void reply(GetRandomize(commands.error));
+						return void message.reply(GetRandomize(commands.error));
 					}
 				}
 			}

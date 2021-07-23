@@ -6,3 +6,4 @@ package-lock.json
 **/*.js
 **/*.js.map
 **/*.log
+Playground.ts

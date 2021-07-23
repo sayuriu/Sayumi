@@ -1,7 +1,5 @@
-import Sayumi from "../../utils/Client";
 import EvalInstance from "../../utils/Eval";
 import Sayumi_Command from "../../utils/interfaces/Command";
-import { ExtMessage } from "../../utils/interfaces/extended/ExtMessage";
 
 const cmd: Sayumi_Command =
 {
@@ -10,7 +8,7 @@ const cmd: Sayumi_Command =
 	groups: ['Utilities'],
 	terminal: true,
 	master_explicit: true,
-	onTrigger: (client: Sayumi, message: ExtMessage) =>
+	onTrigger: (client, message) =>
 	{
 		const sessionID = EvalInstance.getSessionsID(message.author.id, message.channel.id);
 		client.EvalSessions.set(

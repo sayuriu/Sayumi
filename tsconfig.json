@@ -13,6 +13,7 @@
 		"watch": true
 	},
 	"exclude": [
+		"**/Playground.ts",
 		"node_modules",
 		"temp"
 	]

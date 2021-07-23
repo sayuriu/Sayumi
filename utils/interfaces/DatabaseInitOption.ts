@@ -1,4 +1,4 @@
-export interface DatabaseInitOption
+interface DatabaseInitOption
 {
 	/** URI for the main connection. */
 	uri: string;
@@ -15,3 +15,5 @@ export interface DatabaseInitOption
 	/** Specifies if this uses local host. */
 	local: boolean;
 }
+
+export default DatabaseInitOption;

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { PermissionString } from "discord.js";
 import { ExtMessage } from "./extended/ExtMessage";
 import Sayumi from "../Client";
@@ -28,11 +27,11 @@ interface Sayumi_Command
 
 	/** `[optional]` Command cooldown, in seconds. Default to `3`.*/
 	cooldown?: number;
-	/** `[optional]` Enable if this command should have cooldown across the guild? */
+	/** `[optional]` Enable if this command should have cooldown across the guild. */
 	guildCooldown?: boolean;
 	/** `[optional]` Enable if this is a guild command.*/
 	guildOnly?: boolean;
-	/** `[optional] Permission strings, required for both Sayumi and the user. */
+	/** `[optional]` Permission strings, required for both Sayumi and the user. */
 	reqPerms?: PermissionString[];
 	/** `[optional]` Who can use this command. (Must associate with `ReqPerms`) */
 	reqUsers?: string[];
@@ -40,7 +39,7 @@ interface Sayumi_Command
 	nsfw?: boolean | 'partial';
 	/** `[optional]` Enable if this command is owner-exclusive. This will bypass some parameters.*/
 	master_explicit?: boolean;
-	/** `[optional]` This command's usage. A prefix is pre-included, so only provide parameters here. */
+	/** `[optional]` This command's usage. A prefix is pre-included, so only provide arguments/parameters here. */
 	usage?: string[];
 	/** `[optional]` An advanced take on `usage`. Show associated params type. (`usage` must be included for this to show.) */
 	usageSyntax?: string[];
@@ -51,8 +50,7 @@ interface Sayumi_Command
 	/** `[optional] Extra notes for this command.*/
 	notes?: string[];
 	/** `[REQUIRED]` The function which executes when this command is called. */
-	onTrigger: (client: Sayumi, message: ExtMessage, ...args: any[]) => void;
-
+	onTrigger: (client: Sayumi, message: ExtMessage, ...args: string[]) => void;
 	// Hidden
 	prompt?: boolean;
 }

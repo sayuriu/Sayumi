@@ -33,14 +33,14 @@ const cmd: Sayumi_Command = {
 			`\`${stringPad('Internals:', '[Getting...]', '.', 24)}\``,
 		].join('\n');
 
-		const { hour, minute, second } = client.Methods.Time.TimestampToTime(Date.now() - client.uptime);
+		const { hours, minutes, seconds } = client.Methods.Time.TimestampToTime(Date.now() - client.uptime);
 
 		void message.channel.send(
 			{
 				embeds: [
 					new EmbedConstructor()
 					.setTitle('Status')
-					.setDescription(`\`Uptime: ${hour > 0 ? `${hour} hr${hour > 1 ? 's' : ''} ` : ''}${minute > 0 ? `${minute} min${minute > 1 ? 's' : ''} ` : ''}${second > 0 ? `${second} sec${second > 1 ? 's' : ''}` : ''}\``)
+					.setDescription(`\`Uptime: ${hours > 0 ? `${hours} hr${hours > 1 ? 's' : ''} ` : ''}${minutes > 0 ? `${minutes} min${minutes > 1 ? 's' : ''} ` : ''}${seconds > 0 ? `${seconds} sec${seconds > 1 ? 's' : ''}` : ''}\``)
 					.addField('Process', processArrString, true)
 					.addField('Latency', latencyArrString, true)
 					.setColor('#f5f242')
@@ -74,7 +74,7 @@ const cmd: Sayumi_Command = {
 					new EmbedConstructor()
 					.setTitle('Status')
 					.setDescription(`\`ProcessID [${hex}]\``)
-					.addField('Uptime', `\`${hour > 0 ? `${hour} hr${hour > 1 ? 's' : ''} ` : ''}${minute > 0 ? `${minute} min${minute > 1 ? 's' : ''} ` : ''}${second > 0 ? `${second} sec${second > 1 ? 's' : ''}` : ''}\``)
+					.addField('Uptime', `\`${hours > 0 ? `${hours} hr${hours > 1 ? 's' : ''} ` : ''}${minutes > 0 ? `${minutes} min${minutes > 1 ? 's' : ''} ` : ''}${seconds > 0 ? `${seconds} sec${seconds > 1 ? 's' : ''}` : ''}\``)
 					.addField('Handling', `\`${client.CommandList.size} command${client.CommandList.size > 1 ? 's' : ''}\``)
 					.addField('Process', processArrString, true)
 					.addField('Latency', latencyArrString, true)

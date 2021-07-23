@@ -4,6 +4,7 @@
         "**/*.ts",
     ],
 	"exclude": [
+		"**/Playground.ts",
 		"node_modules",
 		"temp"
 	],

@@ -2,7 +2,7 @@ interface Command_Group
 {
 	name: string;
 	description: string;
-	colorCode: string;
+	colorCode: `#${string}`;
 	commands: string[];
 	underDev: string[];
 	keywords: string[];

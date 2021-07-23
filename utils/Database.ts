@@ -1,4 +1,4 @@
-import { DatabaseInitOption } from "./interfaces/DatabaseInitOption";
+import DatabaseInitOption from "./interfaces/DatabaseInitOption";
 import { connect, connection, NativeError } from "mongoose";
 import logCarrier, { Error, Inform, Warn } from "./Logger";
 import chalk from "chalk";

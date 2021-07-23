@@ -30,6 +30,7 @@ interface EvalStats
 {
 	input: string;
 	inputRaw: string;
+	inspectDepth: number;
 	output?: string;
 	outputRaw?: any;
 	outputType?: string;
@@ -63,6 +64,7 @@ export = class EvalInstance
 	private evalStatus: EvalStats = {
 		input: null,
 		inputRaw: null,
+		inspectDepth: 2,
 		flags: [],
 	};
 	// #endregion
@@ -116,7 +118,7 @@ export = class EvalInstance
 					})
 					.catch(e => {
 						void this.listenerChannel.send('Eval instance failed to start.');
-						this.currentMessage.client.Log.Error(`[Eval] ${e}`);
+						this.currentMessage.client.RaiseException(`[Eval] ${e}`);
 						return this.destroy();
 					});
 		}
@@ -155,7 +157,7 @@ export = class EvalInstance
 				this.listenerChannel.send(`\`\`\`js\n${this.evalStatus.output}\`\`\`\u200b\`${this.evalStatus.outputType}\``)
 				.then(m => this.outputWindows.push(m as ExtMessage))
 				.catch(() => {
-					this.blankEmbed('Failed to discplay extended window.');
+					this.blankEmbed('Failed to display extended window.');
 					this.updateMainInstance();
 					return;
 				});
@@ -211,6 +213,8 @@ export = class EvalInstance
 		this.evalStatus.inputRaw = null;
 		this.evalStatus.input = null;
 
+		this.evalStatus.inspectDepth = 2;
+		this.evalStatus.error = null;
 		this.evalStatus.output = null;
 		this.evalStatus.outputRaw = null;
 		this.evalStatus.outputType = null;
@@ -283,11 +287,10 @@ class EvalProcessor
 	get FlagRegex()
 	{
 		return {
-			"SHOW_HIDDEN": /(-(-showHidden|-showhidden|sh|SH)\s){1}/,
-			"SHOW_EXTENDED": /(-(ext|-showExt)\s){1}/,
-			"LOG": /(-(-log|l)\s){1}/,
-			// tricky arg: do later
-			"DEPTH": /((-(d|-depth) \d+)\s){1}/,
+			"SHOW_HIDDEN": /-(-showHidden|-showhidden|sh|SH)\s{1}/g,
+			"SHOW_EXTENDED": /-(ext|-showExt)\s{1}/g,
+			"LOG": /-(-log|l)\s{1}/g,
+			"DEPTH": /-(d|-depth)\s(\d+)\s{1}/g,
 		};
 	}
 
@@ -326,8 +329,12 @@ class EvalProcessor
 
 		for (const flag in this.FlagRegex)
 		{
-			if (this.FlagRegex[flag as keyof FlagRegExp].exec(input))
+			const regexMatch = this.FlagRegex[flag as keyof FlagRegExp].exec(input);
+			if (regexMatch)
 			{
+				if (flag === 'DEPTH')
+					this.data.inspectDepth = parseInt(regexMatch.filter(e => !Number.isNaN(parseInt(e)))[0]);
+
 				input = input.replace(this.FlagRegex[flag], '');
 				if (!this.data.flags.includes(flag as AllowedFlags)) this.data.flags.push(flag as AllowedFlags);
 			}
@@ -347,7 +354,7 @@ class EvalProcessor
 			const output = inspect(
 						outputRaw,
 						this.data.flags.includes('SHOW_HIDDEN'),
-						2,
+						this.data.inspectDepth,
 						false,
 					);
 
@@ -355,7 +362,7 @@ class EvalProcessor
 				this.message.client.Log('info', inspect(
 						outputRaw,
 						this.data.flags.includes('SHOW_HIDDEN'),
-						2,
+						this.data.inspectDepth,
 						true,
 					));
 
@@ -363,31 +370,40 @@ class EvalProcessor
 			const diffTime = process.hrtime(startTime);
 
 			let outputType = (typeof outputRaw).toString();
+			if (outputType === 'undefined') outputType = 'unknown';
+			if (output.startsWith('[')  && output.endsWith(']')) outputType = 'array';
 			outputType = outputType.replace(outputType.substr(0, 1), outputType.substr(0, 1).toUpperCase());
 
 			if (output.indexOf('{') > -1 && output.endsWith('}'))
 			{
 				const header = output.substr(0, output.indexOf('{') - 1);
-				if (header.toLowerCase().includes(outputType.toLowerCase()))
+				if (header)
 				{
-					outputType = `[${header}]`;
-					outputType = outputType.replace(/^\[+/, '').replace(/]+$/, '');
+					if (header.toLowerCase().includes(outputType.toLowerCase()))
+					{
+						outputType = `[${header}]`;
+						outputType = outputType.replace(/^\[+/, '').replace(/]+$/, '');
+					}
+					else outputType += `: ${header}`;
 				}
-				else outputType += `: ${header}`;
 			}
 
-			this.data.error = null;
-			this.data.output = output;
-			this.data.outputRaw = outputRaw;
-			this.data.outputType = outputType;
-			this.data.diffTime = diffTime;
+			Object.assign(this.data, {
+				error: null,
+				output,
+				outputRaw,
+				outputType,
+				diffTime,
+			});
 
 		} catch (error) {
-			this.data.error = error as EvalError;
-			this.data.output = null;
-			this.data.outputRaw = null;
-			this.data.outputType = 'error';
-			this.data.diffTime = [0, 0];
+			Object.assign(this.data, {
+				error,
+				output: null,
+				outputRaw: null,
+				outputType: 'error',
+				diffTime: [0, 0],
+			});
 		}
 	}
 

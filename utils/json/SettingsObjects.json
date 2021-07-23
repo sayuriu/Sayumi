@@ -3,27 +3,27 @@
 		"title": "AFK Users",
 		"name" : "afk",
 		"description": "Similar to Dyno's AFK command.",
-		"reqPerms": "MANAGE_GUILD",
-		"reqUser": "Guild Manager",
-		"usage": "<enable | disable>"
+		"reqPerms": ["MANAGE_GUILD"],
+		"reqUser": ["Guild Manager"],
+		"usage": ["<enable | disable>"]
 	},
 
 	"active_channels" : {
 		"title": "Active Channels",
 		"name": "active",
 		"description": "Configure channels that Sayumi can send messages to.",
-		"reqPerms": "MANAGE_CHANNELS",
-		"reqUser": "Channel Manager",
+		"reqPerms": ["MANAGE_CHANNELS"],
+		"reqUser": ["Channel Manager"],
 		"usage": ["[list?]", "<add / remove> <channel ID / name or direct tag>"],
-		"notes": "By default Sayumi will prioritize looking for 'bot' channel then 'general' if no such channel found."
+		"notes": ["By default Sayumi will prioritize looking for 'bot' channel then 'general' if no such channel found."]
 	},
 
 	"message_log": {
 		"title": "Message Log",
 		"name": "msglog",
 		"description": "Log deleted/edited messages from users and notify in the selected channel.",
-		"reqPerms": "MANAGE_GUILD",
-		"reqUser": "Guild Manager",
+		"reqPerms": ["MANAGE_GUILD"],
+		"reqUser": ["Guild Manager"],
 		"usage": ["[enable / disable?]", "[set <channel name> | setlimit <number>]"]
 	},
 
@@ -31,8 +31,8 @@
 		"title": "Unknown Command Response",
 		"name": "unknowncmd",
 		"description": "Settings for responses to unknown commands.",
-		"reqPerms": "MANAGE_CHANNELS",
-		"reqUser": "Channel Manager",
+		"reqPerms": ["MANAGE_CHANNELS"],
+		"reqUser": ["Channel Manager"],
 		"usage": ["[boolean? list]", "<add | remove> <channel ID / name or direct tag>"]
 	},
 
@@ -40,9 +40,9 @@
 		"title": "Prefix",
 		"name": "prefix",
 		"description": "Configure Sayumi's prefix in this server.",
-		"reqPerms": "MANAGE_GUILD",
-		"reqUser": "Guild Manager",
-		"usage": "[new prefix?]",
-		"notes": "Alternately, you can configure the prefix quicky using command {prefix}prefix"
+		"reqPerms": ["MANAGE_GUILD"],
+		"reqUser": ["Guild Manager"],
+		"usage": ["[new prefix?]"],
+		"notes": ["Alternately, you can configure the prefix quicky using command `{prefix}prefix`."]
 	}
 }

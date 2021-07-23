@@ -4,6 +4,7 @@ import { ExtGuild } from "./ExtGuild";
 
 export interface ExtMessage extends Message
 {
+	requestID?: `${bigint}`;
 	client: Sayumi;
 	guild: ExtGuild;
 	prefixCall?: string;

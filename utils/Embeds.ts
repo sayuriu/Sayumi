@@ -1,8 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-empty-interface */
 import { DMChannel, GuildMember, Message, MessageEmbed, NewsChannel, TextChannel, ThreadChannel, User, VoiceChannel } from 'discord.js';
-import request from 'request';
-import GetTime from './functions/time/get-time';
+import GetTime from './methods/time/get-time';
 import { version as ver } from '../package.json';
 import { nasa as nasaProps } from './json/Props.json';
 import * as regions from './json/Regions.json';

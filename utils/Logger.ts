@@ -10,7 +10,8 @@ import { createLogger, transports, format, Logger } from 'winston';
 import chalk from 'chalk';
 import { existsSync, mkdirSync } from 'fs';
 import { name as pName, author, version, dependencies, repository } from '../package.json';
-import DateTime from './functions/time/get-time';
+import DateTime from './methods/time/get-time';
+import UpdateClockSpeed from './methods/time/set-glb-tclock-spd';
 const logDir = `${__dirname}/logs/`;
 
 const loggerOut = createLogger({
@@ -127,17 +128,21 @@ function logCarrier(logLevel: LogLevels, logMessage: any): void | Logger
 
 	functionClass = chalk.hex('#9c9c9c')(functionClass);
 	const output = outputLevel + ' '  + chalk.hex('#8c8c8c')(Timestamp) + ' ' + functionClass + `\n` + startPoint + ` ${logMessage}`;
+	// if (global.TerminalClock) UpdateClockSpeed(10);
+	global.TerminalClock?.refresh();
+	process.stdout.clearLine(0);
+	process.stdout.cursorTo(0);
 	if (!Levels.some(i => i === logLevel.toLowerCase()))
 	{
 		// if (!logLevel.split('status:')[1].length) return this.carrier('err', '[Global Functions > Logger]: Empty status message.');
-		if (obj) return console.log(output, obj);
-		return console.log(output);
+		if (obj) console.log(output, obj);
+		else console.log(output);
+		return UpdateClockSpeed(1000);
 	}
-
 	console.log(output);
+	// UpdateClockSpeed(1000);
 	return loggerOut.log(logLevel.toLowerCase(), `- ${Timestamp}${functionClass_00 ? ` ${functionClass_00}` : ''} \n${logMessage}`);
 }
-
 	// In case you want to do status message, you might wanna call the carrier itself.
 
 	/** Used once on boot time. */

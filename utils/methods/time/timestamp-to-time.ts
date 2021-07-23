@@ -7,12 +7,12 @@ export default function(timestamp: number): ParsedTime
 	const minutes = Math.floor(timestamp / 60000) % 60;
 	const seconds = Math.floor(timestamp / 1000) % 60;
 
-	return { hour: hours, minute: minutes, second: seconds };
+	return { hours,  minutes, seconds };
 }
 
 interface ParsedTime
 {
-	hour: number;
-	minute: number;
-	second: number;
+	hours: number;
+	minutes: number;
+	seconds: number;
 }

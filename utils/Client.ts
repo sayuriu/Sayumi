@@ -21,13 +21,15 @@ import {
 	TextChannel,
 } from 'discord.js';
 import { Player as MusicPlayer, PlayerOptions } from 'discord-player';
-import chalk from 'chalk';
 import { watch, stat, readFileSync } from 'fs';
 import { join } from 'path';
 import { Types } from 'mongoose';
+import chalk from 'chalk';
+import { spawn } from 'child_process';
 
 import logCarrier, { Error, bootstrap, Debug, Inform, Warn } from './Logger';
 import Database from './Database';
+import EvalInstance from './Eval';
 import EmbedConstructor from './Embeds';
 import Methods from './Methods';
 import Loader, { IssueWarns, ParseCheck } from './Loader';
@@ -36,12 +38,11 @@ import AFKUser from './interfaces/AFKUser';
 import Sayumi_Command from './interfaces/Command';
 import Sayumi_Event from './interfaces/Event';
 import Command_Group from './interfaces/CmdGroup';
-import { DatabaseInitOption } from './interfaces/DatabaseInitOption';
+import DatabaseInitOption  from './interfaces/DatabaseInitOption';
 import GuildData from './interfaces/GuildData';
 
 import GuildDatabase from './database/methods/GuildActions';
 import ClientBootstrap from './database/models/client_bootstrap';
-import EvalInstance from './Eval';
 
 const DefaultIntents: IntentsString[] = [
 	'GUILDS',
@@ -62,10 +63,13 @@ interface ExtMusicPlayerOptions extends PlayerOptions
 
 interface Sayumi_BotClientConfig
 {
+	/* Core options. */
 	core: {
+		/* Discord bot token. Refer to [your app's page](https://discord.com/developers/applications) for more details.*/
 		token: string;
 		evtFolder?: string;
 		cmdFolder?: string;
+		tempFolder?: string;
 		bugChannelID?: string;
 		MusicPlayerOptions?: ExtMusicPlayerOptions;
 	}
@@ -89,6 +93,11 @@ abstract class Sayumi_BaseClient
 	[key: string]: any;
 }
 
+interface ExceptionLevels {
+	'WARN': 0,
+	'ERROR': 1,
+	'FATAL': 2,
+}
 
 export default class Sayumi extends DSClient implements Sayumi_BaseClient
 {
@@ -112,13 +121,14 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 	public readonly cmdDir: string;
 	public readonly evtDir: string;
 	private readonly _bugChannelID: string;
+	private exitReason: string;
 
 	public HANDLED_EVENTS = 0;
 	public CommandList = new Collection<string, Sayumi_Command>();
 	public CommandAliases = new Collection<string[], string>();
 	public CommandCategories = new Collection<string, Command_Group>();
 	public CategoryCompare = new Collection<string, string[]>();
-	public Cooldowns = new Collection<string, Collection<string, number>>();
+	public Cooldowns = new Collection<string, Collection<`${bigint}`, Collection<`${bigint}`, number>>>();
 
 	public CachedGuildSettings = new Collection<string, GuildData>();
 	public EvalSessions = new Collection<string, EvalInstance>();
@@ -140,6 +150,16 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 			},
 		};
 	}
+
+	get ExceptionCode(): ExceptionLevels
+	{
+		return {
+			'WARN': 0,
+			'ERROR': 1,
+			'FATAL': 2,
+		};
+	}
+
 	// #endregion
 	constructor(readonly config: Sayumi_BotClientConfig)
 	{
@@ -149,7 +169,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		if (!DSBotOptions?.intents)
 		{
 			Warn([
-				'[Sayumi] Missing intents in client configuration. Those will be applied to ensure minimum functionality.',
+				`[Client] Missing intents in client configuration. Those will be applied to ensure minimum functionality.`,
 				chalk.hex('#9AA83A')(DefaultIntents.map(i => `  ${i}`).join('\n')),
 				'You can overwrite this configuration by specifying intents via ' + chalk.hex('#9872A2')('DSBotOptions.intents') + ' property in class contructor.',
 			].join('\n'));
@@ -160,6 +180,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		this.HandleProcessErrors();
 		const { token, cmdFolder, evtFolder, bugChannelID, MusicPlayerOptions } = core;
 
+		this.TokenVerif(token);
 		this.cmdDir = cmdFolder ?? 'executables';
 		this.evtDir = evtFolder ?? 'events';
 
@@ -172,12 +193,61 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		this.CommandInit();
 
 		// To skip tsc compile logs
-		this.setTimeout(() => this.WatchDog(this.ROOT_DIR), 6000);
-
+		setTimeout(() => this.WatchDog(this.ROOT_DIR), 6000);
 		this.Database = Object.assign(new Database(databaseOptions), { Guild: GuildDatabase });
 	}
 
 	// #region Methods
+	private TokenVerif(token: string): void
+	{
+		if (!token.length)
+		{
+			this.RaiseException(`[${this.constructor.name}] Token is possibly invalid.`, 'WARN');
+			console.log('Yes, it definitely is.');
+			this.RaiseException(`[${this.constructor.name}] An empty string is not a token.\nConsider getting one via https://discord.com/developers/applications.`);
+			this.RaiseException(`[${this.constructor.name}] Empty bot token.`, 'FATAL');
+		}
+
+		if (
+				this.Methods.Common.SearchString(/\./g, token).length !== 2 ||
+				(token[24] !== '.' && token[31] !== '.') ||
+				token.length < 59
+			)
+		{
+			this.RaiseException(`[${this.constructor.name}] Token is possibly invalid.`, 'WARN');
+			process.stdout.write('Yes, it definitely is.\n');
+			process.stdout.write('Consider rechecking via https://discord.com/developers/applications.\n');
+			this.RaiseException(`[${this.constructor.name}] Invalid token format.`, 'FATAL');
+		}
+		return;
+	}
+
+	// expandable
+	public RaiseException(message: string, type: keyof ExceptionLevels = 'ERROR'): void
+	{
+		if (
+			message.includes('An invalid token was provided.') &&
+			message.includes('WebSocketManager.connect') &&
+			message.includes(`${this.constructor.name}.login`)
+		) type = 'FATAL';
+		const severityLevel = this.ExceptionCode[type];
+		switch(severityLevel)
+		{
+			case 0:
+				this.Log.Warn(message);
+				break;
+			case 1:
+				this.Log.Error(message);
+				break;
+			case 2:
+				this.Log.Error(message);
+				this.exitReason = `[fatal] ${message.substr(0, message.indexOf('\n') > 0 ? message.indexOf('\n') : message.length).trim()}`;
+				return process.exit(1);
+			default: break;
+		}
+		return;
+	}
+
 	/** Initiates the event listener. */
 	private EventListener(): void
 	{
@@ -194,13 +264,13 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
     private HandleProcessErrors(): void
     {
         process.on("uncaughtException", err => {
-            Error(`[Uncaught Exception] ${err.message}\n${err.stack}`);
+            this.RaiseException(`[Uncaught Exception] ${err.message}\n${err.stack}`);
         });
         process.on("unhandledRejection", (err: Error) => {
-            Error(`[Unhandled Promise Rejection] ${err.message}\n${err.stack}`);
+            this.RaiseException(`[Unhandled Promise Rejection] ${err.message}\n${err.stack}`);
         });
         process.on('exit', code => {
-            logCarrier(`status ${code}`, `Process instance has exited with code ${code}.`);
+            logCarrier(`status ${code}`, `Process instance has exited with code ${code}.\nReason: ${this.exitReason ?? 'Process exception [node]'}`);
         });
     }
 
@@ -335,6 +405,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
                     }
                 }
 			}
+			return;
 		});
 
 		const handleErrors = (err: NodeJS.ErrnoException, reqPath: string) => {
@@ -344,7 +415,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
             {
                 case 'ENOENT': return Debug(`[Reload > del] Removed: "${join(PrintCSLPath)}"`);
                 case 'EISDIR': return;
-                default: return Error(`[Reload / ${err.syscall || err.name || 'Error'}] ${err}`);
+                default: return this.RaiseException(`[Reload / ${err.syscall ?? err.name ?? 'Error'}] ${err}`);
             }
         };
 
@@ -372,7 +443,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 			cachedGuilds: this.guilds.cache.size,
 		})
 		.save({}, (err) => {
-			if (err) return Error(`[Database > Client Init Sync] ${err}`);
+			if (err) return this.RaiseException(`[Database > Client Init Sync] ${err}`);
 		});
 		return;
 	}

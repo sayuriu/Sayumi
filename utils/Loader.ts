@@ -7,12 +7,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-var-requires */
 
-import { lstatSync, statSync, readdirSync, writeFileSync } from 'fs';
+import { existsSync, lstatSync, mkdirSync, statSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import * as readline from 'readline';
 import chalk from 'chalk';
 
-import ParseError, { Errors } from './functions/common/parse-errors';
+import ParseError, { Errors } from './methods/common/parse-errors';
 import groupSettings from './GroupSettings';
 import * as Categories from '../utils/json/Categories.json';
 import Sayumi from './Client';
@@ -24,7 +23,6 @@ declare namespace require {
 	export const cache: string[];
 	export const resolve: (id: string, options?: { paths?: string[]; }) => string;
 }
-
 
 interface DirIndex
 {
@@ -90,7 +88,7 @@ export default class Loader extends Loader_Base
                                         + chalk.hex('8c8c8c')(`scan ${this.type}: `)
                                         + chalk.hex('#c15ee6')(this.path)
                                         + ' complete\n';
-					readline.cursorTo(process.stdout, 0);
+					process.stdout.cursorTo(0);
                     return process.stdout.write(string);
                 }
             }
@@ -100,10 +98,29 @@ export default class Loader extends Loader_Base
 		this.recursiveLoad(client, this.path);
         this.stdoutSignalSend('end-scan');
 		summarize(client, this, this.type);
+		global.TerminalClock = setInterval(InternalClock, 34);
+		process.stdout.on('resize', () => {
+			clearInterval(global.TerminalClock);
+			global.TerminalClock = setInterval(InternalClock, 1000);
+		});
+		process.on('SIGWINCH', () => console.log('c'));
+		return;
 	}
 
 	recursiveLoad(client: Client, path: string): void
 	{
+		if (!existsSync(path))
+		{
+			client.RaiseException(`[Loader] Could not find "${path}". Creating one...`, 'WARN');
+			try
+			{
+				mkdirSync(path);
+			}
+			catch(e)
+			{
+				return client.RaiseException(`[Loader] Failed to create "${path}":\n${e}`, 'FATAL');
+			}
+		}
 		readdirSync(path).forEach(file => {
 			const fullPath = join(path, file);
 			// const fullPath = join(this.mainRoot, dirPath);
@@ -196,7 +213,7 @@ export function ParseCheck(type: AllowedTypes, client: Client, path: string, dat
 
 	} catch (e) {
 		errored.push(e);
-		if (hotReload) client.Log.Warn(`[Reload] Failed to load ${path.split('\\').splice(3, path.split('\\').length).join('\\')}:\n${e}`);
+		// if (hotReload) client.RaiseException(`[Reload] Failed to load ${path.split('\\').splice(3, path.split('\\').length).join('\\')}:\n${e}`, 'LIGHT');
 	}
 	return 0;
 }
@@ -359,7 +376,7 @@ function BindCategory(client: Client)
 			}
 		});
 
-		const groupObject = {
+		const groupObject: Command_Group = {
 			name: group,
 			description: CategoryList[group].description,
 			colorCode: CategoryList[group].colorCode,
@@ -380,6 +397,7 @@ import { Collection } from 'discord.js';
 import Command_Group from './interfaces/CmdGroup';
 import { Player as MusicPlayer, PlayerEvents } from 'discord-player';
 import Methods from './Methods';
+import { InternalClock } from './methods/time/set-glb-tclock-spd';
 
 interface Client extends Sayumi
 {
