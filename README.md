@@ -7,6 +7,7 @@ Current repo ver: [1.36.072321b](https://github.com/sayuriu/Sayumi/commit/2c2e42
 Current stage: Inheritance (You can check out the old code [here.](https://github.com/sayuriu/Sayumi_JavaScript))
 ## Current bugs and TODOs
 `cmd:help` navigation system bugs</br>
+`cmd:help` search button bugs</br>
 `cmd:help` missing nav buttons for paged embeds</br>
 `cmd:eval` options to display inspect depth</br>
 `cmds` inherit</br>
