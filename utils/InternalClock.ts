@@ -2,6 +2,8 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
+import { background, bold, foreground } from "./methods/common/ansi-styles";
+
 export default function UpdateClockSpeed(newms: number): void
 {
 	clearInterval(global.TerminalClock);
@@ -49,23 +51,6 @@ export function InternalClock(x = process.stdout.columns - 25, y = process.stdou
 	process.stdout.cursorTo(x, y);
 	process.stdout.write(out);
 }
-
-function HexToRGB(hex: `#${string}`)
-{
-	if (hex.length !== 7) throw 'paint bucket';
-	const r = Math.floor(parseInt(`0x${hex.substr(1, 2)}0000`) / 0xff0000 * 255);
-	const g = Math.floor(parseInt(`0x${hex.substr(3, 2)}00`) / 0xff00 * 255);
-	const b = Math.floor(parseInt(`0x${hex.substr(5, 2)}`) / 0xff * 255);
-
-	return [r, g, b];
-}
-
-const foreground = (hex: `#${string}`) =>  (string: string) => `\u001b[38;2;${HexToRGB(hex).join(';')}m${string}\u001b[39m`;
-const background = (hex: `#${string}`) =>  (string: string) => `\u001b[48;2;${HexToRGB(hex).join(';')}m${string}\u001b[49m`;
-const bold = (string: string, patchBGHex?: `#${string}`) => `\u001b[1m${string}\u001b[0m` + (patchBGHex ? `\u001b[48;2;${HexToRGB(patchBGHex).join(';')}m` : '');
-const italic = (string: string, patchBGHex?: `#${string}`) => `\u001b[3m${string}\u001b[0m` + (patchBGHex ? `\u001b[48;2;${HexToRGB(patchBGHex).join(';')}m` : '');
-
-
 // ansi codes, format \u001b[X;X;Xm(chars)
 /**
 *

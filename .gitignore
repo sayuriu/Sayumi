@@ -1,9 +1,10 @@
-node_modules
 .env
 .vscode
 .vs
+build
+node_modules
 package-lock.json
-**/*.js
-**/*.js.map
-**/*.log
 Playground.ts
+temp
+logs
+**.js

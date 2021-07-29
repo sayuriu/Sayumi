@@ -25,7 +25,7 @@ interface EvalInitConfig
 	UserFilter: (user: User) => boolean;
 }
 
-type AllowedFlags = 'SHOW_HIDDEN' | 'SHOW_EXTENDED' | 'LOG'
+type AllowedFlags = 'SHOW_HIDDEN' | 'SHOW_EXTENDED' | 'LOG' | 'DEPTH'
 interface EvalStats
 {
 	input: string;
@@ -201,7 +201,7 @@ export = class EvalInstance
 	private clearWindows()
 	{
 		this.outputWindows.forEach(inst => {
-			if (!inst.deleted && inst.deletable) void inst.delete().catch(() => null);
+			if (!inst.deleted && inst.deletable) void inst.delete().catch();
 			this.outputWindows.splice(this.outputWindows.indexOf(inst), 1);
 		});
 		return;
@@ -248,7 +248,7 @@ export = class EvalInstance
 			}
 		}
 		this.currentMessage.client.EvalSessions.delete(EvalInstance.getSessionsID(this.MainInstanceUserID, this.listenerChannel.id));
-
+		this.clearWindows();
 		for (const key in this) delete this[key];
 		return;
 	}
@@ -280,7 +280,6 @@ interface FlagRegExp
 	"DEPTH": RegExp,
 }
 
-// TODO: Add implementation for depth args
 class EvalProcessor
 {
 	private message: ExtMessage;
@@ -371,7 +370,7 @@ class EvalProcessor
 
 			let outputType = (typeof outputRaw).toString();
 			if (outputType === 'undefined') outputType = 'unknown';
-			if (output.startsWith('[')  && output.endsWith(']')) outputType = 'array';
+			if (output.startsWith('[')  && output.endsWith(']') && typeof outputRaw !== 'function') outputType = 'array';
 			outputType = outputType.replace(outputType.substr(0, 1), outputType.substr(0, 1).toUpperCase());
 
 			if (output.indexOf('{') > -1 && output.endsWith('}'))
@@ -428,10 +427,12 @@ class EvalProcessor
 					);
 					this.DataExport();
 				}
-				else this.data.flags.push('SHOW_EXTENDED');
+				else while (!this.data.flags.includes('SHOW_EXTENDED'))
+					this.data.flags.push('SHOW_EXTENDED');
 
 			} catch(_) {
-				this.data.flags.push('SHOW_EXTENDED');
+				while (!this.data.flags.includes('SHOW_EXTENDED'))
+					this.data.flags.push('SHOW_EXTENDED');
 			}
 		}
 	}
@@ -484,15 +485,18 @@ class TerminalEmbed
 {
 	static Success(result: EvalStats)
 	{
-		const { diffTime, input, output, outputType, flags } = result;
-
+		const { diffTime, input, output, outputType, flags, inspectDepth } = result;
+		const ifDepth = (flag: AllowedFlags) => {
+			if (flag === 'DEPTH' && inspectDepth !== 2) return `\`DEPTH [L${inspectDepth}]\``;
+			return `\`${flag}\``;
+		};
 		return new MessageEmbed({
 			title: 'Terminal',
 			color: '#5ACC61',
 			fields: [
 				{
 					name: 'Input',
-					value: (flags.length ? `\`flags: ${flags.join(', ')}\`\n` : '') +
+					value: (flags.length ? `\`flags:\` ${flags.map(ifDepth).join(', ')}\n` : '') +
 					`\`\`\`js\n${beautify(input, { format: 'js' })}\n\`\`\``,
 				},
 				{

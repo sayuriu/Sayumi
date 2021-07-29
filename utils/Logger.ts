@@ -7,12 +7,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 import { createLogger, transports, format, Logger } from 'winston';
-import chalk from 'chalk';
+import { foreground, background } from './methods/common/ansi-styles';
 import { existsSync, mkdirSync } from 'fs';
 import { name as pName, author, version, dependencies, repository } from '../package.json';
 import DateTime from './methods/time/get-time';
-import UpdateClockSpeed from './methods/time/set-glb-tclock-spd';
-const logDir = `${__dirname}/logs/`;
+import UpdateClockSpeed from './InternalClock';
+const logDir = `${__dirname}/../logs/`;
 
 const loggerOut = createLogger({
 	transports: [
@@ -81,43 +81,43 @@ function logCarrier(logLevel: LogLevels, logMessage: any): void | Logger
 
 	switch (logLevel) {
 		case 'info': {
-			const hex = chalk.hex('#30e5fc');
+			const hex = foreground('#30e5fc');
 			outputLevel = hex(`[${Header.toUpperCase()}]`);
 			startPoint = hex(startPoint);
 			break;
 		}
 		case 'warn': {
-			const hex = chalk.hex('#ffc430');
-			outputLevel = chalk.bgHex('#ffc430').hex('000000')(`[${Header.toUpperCase()}]`);
+			const hex = foreground('#ffc430');
+			outputLevel = background('#ffc430')(foreground('#000000')(`[${Header.toUpperCase()}]`));
 			startPoint = hex(startPoint);
 			break;
 		}
 		case 'debug': {
-			const hex = chalk.hex('#ed6300');
+			const hex = foreground('#ed6300');
 			outputLevel = hex(`[${Header.toUpperCase()}]`);
 			startPoint = hex(startPoint);
 			break;
 		}
 		case 'verbose': {
-			const hex = chalk.hex('#ffffff');
+			const hex = foreground('#ffffff');
 			outputLevel = hex(`[${Header.toUpperCase()}]`);
 			startPoint = hex(startPoint);
 			break;
 		}
 		case 'silly': {
-			const hex = chalk.hex('#cf05f2');
+			const hex = foreground('#cf05f2');
 			outputLevel = hex(`[${Header.toUpperCase()}]`);
 			startPoint = hex(startPoint);
 			break;
 		}
 		case 'error': {
-			const hex = chalk.hex('#ff2b2b');
-			outputLevel = chalk.bgHex('#ff2b2b').hex('ffffff')(`[${Header.toUpperCase()}]`);
+			const hex = foreground('#ff2b2b');
+			outputLevel = background('#ff2b2b')(foreground('#ffffff')(`[${Header.toUpperCase()}]`));
 			startPoint = hex(startPoint);
 			break;
 		}
 		default: {
-			const hex = chalk.hex('#30e5fc');
+			const hex = foreground('#30e5fc');
 			outputLevel = hex(`[${Header.replace(Header.substr(0, 1), Header.substr(0, 1).toUpperCase())}]`);
 			functionClass = outputLevel.length > 60 ? '' : ' [Terminal]';
 			startPoint = hex(startPoint);
@@ -126,9 +126,8 @@ function logCarrier(logLevel: LogLevels, logMessage: any): void | Logger
 		}
 	}
 
-	functionClass = chalk.hex('#9c9c9c')(functionClass);
-	const output = outputLevel + ' '  + chalk.hex('#8c8c8c')(Timestamp) + ' ' + functionClass + `\n` + startPoint + ` ${logMessage}`;
-	// if (global.TerminalClock) UpdateClockSpeed(10);
+	functionClass = foreground('#9c9c9c')(functionClass);
+	const output = outputLevel + ' '  + foreground('#8c8c8c')(Timestamp) + ' ' + functionClass + `\n` + startPoint + ` ${logMessage}`;
 	global.TerminalClock?.refresh();
 	process.stdout.clearLine(0);
 	process.stdout.cursorTo(0);
@@ -140,7 +139,6 @@ function logCarrier(logLevel: LogLevels, logMessage: any): void | Logger
 		return UpdateClockSpeed(1000);
 	}
 	console.log(output);
-	// UpdateClockSpeed(1000);
 	return loggerOut.log(logLevel.toLowerCase(), `- ${Timestamp}${functionClass_00 ? ` ${functionClass_00}` : ''} \n${logMessage}`);
 }
 	// In case you want to do status message, you might wanna call the carrier itself.
@@ -148,11 +146,11 @@ function logCarrier(logLevel: LogLevels, logMessage: any): void | Logger
 	/** Used once on boot time. */
 export const bootstrap = () => {
 
-	const initString = `${chalk.hex('#e73b3b')(pName)} `
-								+ `${chalk.hex('#8a8a8a')('version')} `
-								+ `${chalk.hex('#212121').bgHex('#a8a8a8')(version)}\n`
-								+ `${chalk.hex('#8a8a8a')('by')} ${chalk.hex('#44bee3')(author)} ${chalk.hex('#757575')(`(${repository.url})`)}\n`
-								+ `${chalk.hex('#8c8c8c')(`${Object.keys(dependencies).length} dependenc${Object.keys(dependencies).length > 1 ? 'ies' : 'y'}`)}`;
+	const initString = `${foreground('#e73b3b')(pName)} `
+								+ `${foreground('#8a8a8a')('version')} `
+								+ `${foreground('#212121')(background('#a8a8a8')(version))}\n`
+								+ `${foreground('#8a8a8a')('by')} ${foreground('#44bee3')(author)} ${foreground('#757575')(`(${repository.url})`)}\n`
+								+ `${foreground('#8c8c8c')(`${Object.keys(dependencies).length} dependenc${Object.keys(dependencies).length > 1 ? 'ies' : 'y'}`)}`;
 	process.stdout.write(`${initString}\n`);
 };
 

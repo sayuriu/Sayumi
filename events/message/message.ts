@@ -10,10 +10,11 @@ import GuildData from "../../utils/interfaces/GuildData";
 import AFKUser from "../../utils/interfaces/AFKUser";
 import { ExtMessage } from "../../utils/interfaces/extended/ExtMessage";
 import { ExtQueue } from "../../utils/interfaces/extended/ExtQueue";
+import Sayumi_Event from "../../utils/interfaces/Event";
 type GuildChannels = TextChannel | NewsChannel | ThreadChannel;
 type NonThreadChannels = TextChannel | NewsChannel;
 
-export = {
+const evt: Sayumi_Event = {
 	name: 'messageCreate',
 	onEmit: async (client: Sayumi, message: ExtMessage): Promise<void> => {
 
@@ -295,3 +296,5 @@ export = {
 		}
 	},
 };
+
+export = evt;

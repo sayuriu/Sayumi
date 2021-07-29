@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { Collection, MessageEmbed, MessageActionRow, MessageButton, MessageSelectMenu, MessageButtonOptions, MessageActionRowComponent, SelectMenuInteraction, AwaitMessageComponentOptions, MessageComponentInteraction, Message, GuildMember } from 'discord.js';
+import Sayumi from '../../utils/Client';
 import ButtonData from '../../utils/interfaces/ButtonData';
 import Command_Group from '../../utils/interfaces/CmdGroup';
 import Sayumi_Command from '../../utils/interfaces/Command';
@@ -24,9 +25,12 @@ const cmd: Sayumi_Command = {
 	},
 };
 
-type Pages = [string, string, number[]][] & { len: number }
+type Pages = [string, string, number[]][] & { len: number };
+type MainScope = 'categories-list' | 'settings-list';
+
 class Handler
 {
+	// #region Props
 	readonly navButtons: ButtonData = {
 		global: {
 			style: 'PRIMARY',
@@ -63,11 +67,11 @@ class Handler
 		individual: [
 			{
 				label: 'Categories',
-				customId: 'help:categories',
+				customId: 'help:categories-list',
 			},
 			{
 				label: 'Settings',
-				customId: 'help:settings',
+				customId: 'help:settings-list',
 			},
 			{
 				label: 'Search',
@@ -91,10 +95,13 @@ class Handler
 	private mainMessage: ExtMessage;
 	private currentReply: ExtMessage;
 	private initialArgs: string[];
-	private scope: string;
+	private scope: 'main' | MainScope | 'cmd-list' | 'cmd-info' | 'settings-info' = 'main';
 	private pages: Pages;
 	private pagePointer: number;
 	private cachedCategory: [Command_Group, Collection<string, Sayumi_Command>];
+
+	private onBoardComponents: (MessageActionRow)[] = [];
+	// #endregion
 
 	constructor(message: ExtMessage, args: string[])
 	{
@@ -118,9 +125,10 @@ class Handler
 			],
 		});
 
+		this.onBoardComponents = [createActionRow(createButtons(this.mainOptionButtons))];
 		this.mainMessage = await this.initialMessage.channel.send({
 			embeds: [embed],
-			components: [createActionRow(createButtons(this.mainOptionButtons))],
+			components: this.onBoardComponents,
 		}) as ExtMessage;
 
 		try {
@@ -132,6 +140,9 @@ class Handler
 			null;
 		}
 	}
+
+	private componentsSync = setInterval(() => this.onBoardComponents = this.mainMessage.components, 5000);
+	private findDisabledButton = (matchName: string) => (b: MessageActionRowComponent) => b.customId === matchName && b.disabled;
 
 	handle(): void
 	{
@@ -149,8 +160,8 @@ class Handler
 	{
 		switch(interaction.customId)
 		{
-			case 'help:categories':
-			case 'help:settings':
+			case 'help:categories-list':
+			case 'help:settings-list':
 				return this.HandleMain(interaction);
 			case 'help:goto':
 				return this.HandleGoto(interaction);
@@ -170,39 +181,66 @@ class Handler
 	async HandleMain(interaction: MessageComponentInteraction)
 	{
 		if (!interaction.deferred) await interaction.defer();
-		await interaction.deleteReply();
-		if (!this.currentReply?.deleted) void this.currentReply?.delete();
-		this.pagePointer = null;
-		delete this.mainMessage.components[1];
+		await interaction.deleteReply().catch();
+		if (!this.currentReply?.deleted)
+			void this.currentReply?.delete().catch().finally(() => delete this.currentReply);
 
-		this.scope = interaction.customId.split(':')[1];
-		return void this.mainMessage.edit({
-			embeds: [this.scope === 'settings' ? generateSettingsEmbed() : this.generateCategoryListEmbed()],
-			components: activateButton(this.mainMessage.components, { row: 0, searchID: interaction.customId, exceptOthers: true }),
+		delete this.pagePointer;
+		delete this.onBoardComponents[1];
+
+		this.scope = `${interaction.customId.split(':')[1] as MainScope}`;
+		this.activateButton({ row: 0, searchID: interaction.customId, exceptOthers: true });
+		this.mainMessage = await this.mainMessage.edit({
+			embeds: [this.scope === 'settings-list' ? generateSettingsEmbed() : this.generateCategoryListEmbed()],
+			components: this.onBoardComponents,
 		});
+		return;
 	}
 
 	async HandleSearch(interaction: MessageComponentInteraction)
 	{
-		void interaction.deleteReply();
+		if (this.mainMessage.components[0].components.filter(this.findDisabledButton('help:goto'))?.length)
+		{
+			void interaction.deleteReply().catch();
+			this.onBoardComponents[0].components[0].disabled = false;
+		}
+
+		const activePageJump = this.mainMessage.components[1]?.components.filter(this.findDisabledButton('help-nav:goto'));
+		if (activePageJump?.length)
+		{
+			void interaction.deleteReply().catch();
+			this.onBoardComponents[1].components[this.mainMessage.components[1].components.findIndex(this.findDisabledButton('help-nav:goto'))].disabled = false;
+		}
+
+		void this.currentReply?.delete().catch();
+		delete this.currentReply;
 		if (this.mainMessage.deleted) return;
-		this.mainMessage.components = activateButton(this.mainMessage.components, { row: 0, searchID: 'help:search' });
-		if (!['settings', 'categories', 'categories-cmd'].includes(this.scope)) this.mainMessage.components[0].components.shift();
-		void this.mainMessage.edit({
-			components: this.mainMessage.components,
+		this.activateButton({ row: 0, searchID: 'help:goto', overwriteStyle: 'SECONDARY' });
+		this.activateButton({ row: 0, searchID: 'help:search' });
+		if (!['settings-list', 'categories-list', 'cmd-list'].includes(this.scope) && this.mainMessage.components[0].components.length === 5)
+			this.onBoardComponents[0].components.shift();
+
+		this.mainMessage = await this.mainMessage.edit({
+			components: this.onBoardComponents,
 		});
-		await interaction.reply('What do you want to search for?');
+
+		await interaction.reply('What do you want to search for?\nYou can type `cancel` or `exit` to opt out.');
+		this.currentReply = await interaction.fetchReply() as ExtMessage;
 		void this.mainMessage.channel.awaitMessages({
-			filter: _ => _.author.id === this.initialMessage.author.id,
+			filter: _ => _.author.id === this.initialMessage?.author.id,
 			max: 1,
 			time: 10000,
+			errors: ['time'],
 		})
-		.then(received => {
+		.then(async listened => {
 			let target: Sayumi_Command | Command_Group | GuildSettings;
 			let toSend: MessageEmbed;
 			let type: string;
-			if (received.first().deletable) void received.first().delete();
-			const [query, mode] = this.ParseSearchQuery(received.first().content);
+
+			const received = listened.first();
+			if (received?.deletable) void received.delete().catch();
+			if (['cancel', 'exit'].includes(listened.first().content.toLowerCase().trim())) throw null;
+			const [query, mode] = this.ParseSearchQuery(received.content);
 			switch (mode)
 			{
 				case 'cmd':
@@ -227,18 +265,21 @@ class Handler
 						?? this.mainMessage.client.CommandList.find(c => c.aliases?.includes(query));
 					if (target)
 					{
+						this.scope = 'cmd-info';
 						type = 'cmd';
 						break;
 					}
 					target = this.mainMessage.client.CommandCategories.find(c => c.keywords.includes(query));
 					if (target)
 					{
+						this.scope = 'cmd-list';
 						type = 'cat';
 						break;
 					}
 					target = createSettingsList().get(query);
 					if (target)
 					{
+						this.scope = 'settings-info';
 						type = 'set';
 						break;
 					}
@@ -247,8 +288,9 @@ class Handler
 			}
 			if (!target)
 			{
-				void interaction.editReply('No result matches your query.')
-					.then(() => setTimeout(() => void interaction.deleteReply(), 5000));
+				void interaction.editReply('No result matches your query.');
+					(interaction.client as Sayumi).Methods.Task.DelayTask(4000);
+				throw null;
 			}
 			switch(type)
 			{
@@ -259,14 +301,15 @@ class Handler
 				}
 				case 'cat':
 				{
-					if (this.mainMessage.components[0].components.length < 5)
-						this.mainMessage.components[0].components.unshift(new MessageButton({
+					if (this.onBoardComponents[0].components.length < 5)
+						this.onBoardComponents[0].components.unshift(new MessageButton({
 							style: 'PRIMARY',
 							type: 'BUTTON',
 							label: 'Go to...',
 							customId: 'help:goto',
 						}));
-					toSend = this.createCategoryInfoEmbed(target as Command_Group);
+					this.cachedCategory = [target as Command_Group, this.mainMessage.client.CommandList.filter(c => (target as Command_Group).commands.includes(c.name))];
+					toSend = this.createCategoryInfoEmbed();
 					break;
 				}
 				case 'set':
@@ -275,42 +318,57 @@ class Handler
 					break;
 				}
 			}
-
-			enableAll(this.mainMessage.components[0].components);
-			// enableAll(this.mainMessage.components[0].components, `help:${this.scope}`);
-			void this.mainMessage.edit({
-				embeds: toSend ? [toSend] : this.mainMessage.embeds,
-				components: this.mainMessage.components,
-			});
+			if (toSend)
+			{
+				if (this.scope !== 'cmd-list') delete this.onBoardComponents[1];
+				void interaction.deleteReply().catch();
+				if (type !== 'cat' && this.mainMessage.components[0].components.length === 5) this.onBoardComponents[0].components.shift();
+				enableAll(this.onBoardComponents[0].components, [this.translateScopeToButtonId()]);
+				this.mainMessage = await this.mainMessage.edit({
+					embeds: [toSend],
+					components: this.onBoardComponents,
+				});
+			}
 			return;
 		})
-		.catch(e => {
-			console.log(e);
-		})
-		.finally(() => {
-			void interaction.deleteReply().catch(() => null);
-			enableAll(this.mainMessage?.components[0].components);
-			return void this.mainMessage.edit({
-				components: this.mainMessage.components,
-			});
+		.catch(async () => {
+			void interaction.deleteReply().catch();
+			enableAll(this.onBoardComponents[0].components, [this.translateScopeToButtonId()]);
+			this.mainMessage = await this.mainMessage.edit({
+				components: this.onBoardComponents,
+			}).catch();
+			return;
 		});
 	}
 
 	async HandleGoto(interaction: MessageComponentInteraction)
 	{
 		let forceQuit = false;
-		void this.mainMessage.edit({
-			components: activateButton(this.mainMessage.components, { row: 0, searchID: 'help:goto' }),
-		});
+		if (this.mainMessage.components[0].components.filter(this.findDisabledButton('help:search'))?.length)
+		{
+			void interaction.deleteReply().catch();
+			this.onBoardComponents[0].components[4].disabled = false;
+		}
+		const activePageJump = this.mainMessage.components[1]?.components.filter(this.findDisabledButton('help-nav:goto'));
+		if (activePageJump?.length)
+		{
+			void interaction.deleteReply().catch();
+			this.onBoardComponents[1].components[this.mainMessage.components[1].components.findIndex(this.findDisabledButton('help-nav:goto'))].disabled = false;
+		}
 
-		let toSend: MessageEmbed = null;
+		this.activateButton({ row: 0, searchID: 'help:search', overwriteStyle: 'SECONDARY' });
+		this.activateButton({ row: 0, searchID: 'help:goto' });
+		this.mainMessage = await this.mainMessage.edit({
+			components: this.onBoardComponents,
+		});
+		let toSend: MessageEmbed;
 		switch (this.scope)
 		{
-			case 'settings':
+			case 'settings-list':
 			{
-				this.pagePointer = null;
-				this.pages = null;
-				this.cachedCategory = null;
+				delete this.pagePointer;
+				delete this.pages;
+				delete this.cachedCategory;
 				await interaction.reply({
 					content: 'Say, what setting do you want to see?',
 					components: [createActionRow([createSettingsMenu()])],
@@ -325,21 +383,21 @@ class Handler
 					filter: i => (i.member as GuildMember).id === this.initialMessage.author.id,
 				});
 
-				if (this.currentReply?.deleted) this.currentReply = null;
+				if (this.currentReply?.deleted) delete this.currentReply;
 
 				if (targetName === 'cancel' || !targetName)
 				{
 					forceQuit = true;
 					break;
 				}
+				this.scope = 'settings-info';
 				toSend = this.createSettingsInfoEmbed(targetName);
-
 				break;
 			}
-			case 'categories':
+			case 'categories-list':
 			{
-				this.pagePointer = 0;
-				this.pages = null;
+				delete this.pagePointer;
+				delete this.pages;
 				await interaction.reply({
 					content: 'Say, what category do you want to see?',
 					components: [createActionRow([this.createCategoryMenu()])],
@@ -354,7 +412,7 @@ class Handler
 					filter: i => (i.member as GuildMember).id === this.initialMessage.author.id,
 				});
 
-				if (this.currentReply.deleted) this.currentReply = null;
+				if (this.currentReply?.deleted) delete this.currentReply;
 
 				if (targetName === 'cancel' || !targetName)
 				{
@@ -362,14 +420,14 @@ class Handler
 					break;
 				}
 
+				this.scope = 'cmd-list';
 				const category = this.mainMessage.client.CommandCategories.find(c => c.keywords.includes(targetName));
 				this.cachedCategory = [category, this.mainMessage.client.CommandList.filter(c => category.commands.includes(c.name))];
 
-				toSend = this.createCategoryInfoEmbed(category);
-				this.scope = 'categories-cmd';
+				toSend = this.createCategoryInfoEmbed();
 				break;
 			}
-			case 'categories-cmd':
+			case 'cmd-list':
 			{
 				const menu = this.createCategoryCmdMenu();
 				if (!menu)
@@ -390,7 +448,7 @@ class Handler
 					filter: i => (i.member as GuildMember).id === this.initialMessage.author.id,
 				});
 
-				if (this.currentReply.deleted) this.currentReply = null;
+				if (this.currentReply?.deleted) delete this.currentReply;
 
 				const c = this.initialMessage.client.CommandList.get(targetName);
 				if (!c)
@@ -399,33 +457,144 @@ class Handler
 					break;
 				}
 
+				this.scope = 'cmd-info';
 				toSend = this.createCommandInfoEmbed(c);
-				this.mainMessage.components[0].components.shift();
-				delete this.mainMessage.components[1];
-				this.scope = 'main';
+				delete this.onBoardComponents[1];
 				break;
 			}
 		}
 
-		enableAll(this.mainMessage.components[0].components, forceQuit ? `help:${this.scope}` : null);
+		enableAll(this.onBoardComponents[0].components, forceQuit ? [this.translateScopeToButtonId()] : null);
 		if (!forceQuit)
 		{
-			if (!['settings', 'categories', 'categories-cmd'].includes(this.scope)) this.mainMessage.components[0].components.shift();
-			void this.mainMessage.edit({
+			if (!['settings-list', 'categories-list', 'cmd-list'].includes(this.scope)) this.onBoardComponents[0].components.shift();
+			this.mainMessage = await this.mainMessage.edit({
 				embeds: [toSend],
-				components: this.mainMessage.components,
-			});
+				components: this.onBoardComponents,
+			}).catch();
 		}
-		else void this.mainMessage.edit({
-			components: this.mainMessage.components,
+		else this.mainMessage = await this.mainMessage.edit({
+			components: this.onBoardComponents,
 		});
 		return;
 	}
 
-	async HandleNav(interaction: MessageComponentInteraction)
+	HandleNav(interaction: MessageComponentInteraction): void
 	{
+		if (!this.pages || Number.isNaN(parseInt(this.pagePointer?.toString()))) return;
+		const action = interaction.customId.split(':')[1];
+		switch(action)
+		{
+			case 'first':
+			{
+				this.pagePointer = 0;
+				break;
+			}
+			case 'prev':
+			{
+				if (this.pagePointer) this.pagePointer--;
+				break;
+			}
+			case 'next':
+			{
 
+				if (this.pagePointer < this.pages.length - 1) this.pagePointer++;
+				break;
+			}
+			case 'last':
+			{
+				this.pagePointer = this.pages.length - 1;
+				break;
+			}
+			case 'goto':
+				return void this.PageJump(interaction);
+		}
+		void interaction.defer();
+		return void this.ChangePages();
 	}
+
+	private async PageJump(interaction: MessageComponentInteraction)
+	{
+		if (this.mainMessage.components[0].components.filter(this.findDisabledButton('help:goto'))?.length)
+		{
+			void interaction.deleteReply().catch();
+			this.onBoardComponents[0].components[0].disabled = false;
+		}
+		if (this.mainMessage.components[0].components.filter(this.findDisabledButton('help:search'))?.length)
+		{
+			void interaction.deleteReply().catch();
+			this.onBoardComponents[0].components[4].disabled = false;
+		}
+
+		void this.currentReply?.delete().catch();
+		delete this.currentReply;
+		if (this.mainMessage.deleted) return;
+
+		this.activateButton({ row: 1, searchID: 'help-nav:jump' });
+		this.mainMessage = await this.mainMessage.edit({
+			components: this.onBoardComponents,
+		});
+
+		await interaction.reply(`What page do you want to jump to?\n(From 1 to ${this.pages.length})`);
+		this.currentReply = await interaction.fetchReply() as ExtMessage;
+		void this.mainMessage.channel.awaitMessages({
+			filter: _ => _.author.id === this.initialMessage.author.id,
+			max: 1,
+			time: 10000,
+			errors: ['time'],
+		})
+		.then(received => {
+			void interaction.deleteReply().catch();
+			const content = received.first().content.trim();
+			if (content.toLowerCase() === 'last')
+			{
+				this.pagePointer = this.pages.length - 1;
+				return void this.ChangePages();
+			}
+			if (content.toLowerCase() === 'first')
+			{
+				this.pagePointer = 0;
+				return void this.ChangePages();
+			}
+			const ind = parseInt(content);
+			if (Number.isNaN(ind))
+			{
+				void interaction.editReply('I was expecting a number.');
+					(interaction.client as Sayumi).Methods.Task.DelayTask(4000);
+				throw null;
+			}
+			this.pagePointer = ind;
+			return void this.ChangePages();
+		})
+		.catch(() => void interaction.deleteReply().catch());
+	}
+
+	private async ChangePages()
+	{
+		if (this.pagePointer === 0)
+			this.activateButtons([
+				{ searchID: 'help-nav:first' },
+				{ searchID: 'help-nav:prev' },
+			], {
+				row: 1,
+				overwriteStyle: 'SECONDARY',
+			});
+
+		if (this.pagePointer === this.pages.length - 1)
+		this.activateButtons([
+			{ searchID: 'help-nav:next' },
+			{ searchID: 'help-nav:last' },
+		], {
+			row: 1,
+			overwriteStyle: 'SECONDARY',
+		});
+
+		this.mainMessage = await this.mainMessage.edit({
+			embeds: [this.createCategoryInfoEmbed()],
+			components: this.onBoardComponents,
+		});
+	}
+
 	// #endregion
 	ParseSearchQuery(input: string)
 	{
@@ -489,7 +658,7 @@ class Handler
 
 	private createCategoryCmdMenu()
 	{
-		if (!this.pages || Number.isNaN(parseInt(this.pagePointer.toString())) || !this.cachedCategory) return null;
+		if (!this.pages || Number.isNaN(parseInt(this.pagePointer?.toString())) || !this.cachedCategory) return null;
 		const menu = new MessageSelectMenu({
 			customId: 'help:cate-cmd-menu',
 			placeholder: generatePlaceholderText(),
@@ -555,11 +724,6 @@ class Handler
 			description: `${unstable ? '**[Under Development!]** __This command may not running as expected.__\n' : ''}*${description}*${reqPerms.length ? `\nRequired permissions: ${reqPerms.map(r => `\`${r}\``).join(', ')}` : ''}`,
 			fields: [
 				{
-					name: 'Usage',
-					value: usageString +
-						(notes.length ? `**Extra notes:**\n*${notes.join('\n')}*` : ''),
-				},
-				{
 					name: 'Command availability',
 					value: master_explicit ? 'Master dedicated ~' :
 							`${guildOnly ? `${reqUsers.length ? `[Guild only] ${reqUsers.join(', ')}` : 'Guild only.'}` : GetRandomize(responses.commands.info.availability)}`,
@@ -579,6 +743,18 @@ class Handler
 			},
 		});
 
+		if (notes.length) embed.fields.unshift({
+			name: 'Extra notes',
+			value: `*${notes.join('\n')}*`,
+			inline: false,
+		});
+
+		if (usageString) embed.fields.unshift({
+			name: 'Usage',
+			value: usageString,
+			inline: false,
+		});
+
 		if (aliases.length) embed.fields.unshift({
 			name: GetRandomize(responses.commands.info.aliases),
 			value: aliases.map(a => `\`${a}\``).join(', '),
@@ -588,10 +764,11 @@ class Handler
 		return embed;
 	}
 
-	private createCategoryInfoEmbed(category: Command_Group)
+	private createCategoryInfoEmbed()
 	{
-		this.pagePointer = 0;
-		this.pages = createCategoryPages([category, this.mainMessage.client.CommandList.filter(c => category.commands.includes(c.name))]);
+		if (Number.isNaN(parseInt(this.pagePointer?.toString()))) this.pagePointer = 0;
+		if (!this.pages) this.pages = createCategoryPages(this.cachedCategory);
+		const category = this.cachedCategory[0];
 
 		const embed = new MessageEmbed({
 			title: `Category: ${category.name}`,
@@ -612,10 +789,10 @@ class Handler
 		if (this.pages.length > 1)
 		{
 			const navButtons = createActionRow(createButtons(this.navButtons));
-			if (this.pages.length === 2 && navButtons.components.length === 2)
+			if (this.pages.length === 2 && navButtons.components.length === 5)
 				navButtons.components = [navButtons.components[1], navButtons.components[3]];
 
-			this.mainMessage.components.push(navButtons);
+			this.onBoardComponents.push(navButtons);
 		}
 		return embed;
 	}
@@ -643,15 +820,57 @@ class Handler
 
 		return embed;
 	}
+
 	destroy()
 	{
-		void this.mainMessage?.delete();
-		void this.currentReply?.delete();
+		clearInterval(this.componentsSync);
+		void this.mainMessage?.delete().catch();
+		void this.currentReply?.delete().catch();
 		for (const key in this) delete this[key];
 		return;
 	}
 
-	// #endregion
+	private activateButton(options: ActivateButtonOptions)
+	{
+		const { row, searchID, exceptOthers = false, overwriteStyle = 'SUCCESS' } = options;
+		if (Number.isNaN(parseInt(row.toString())) || row < 0) return;
+
+		if (['settings-list', 'categories-list', 'cmd-list'].includes(this.scope) && this.onBoardComponents[row].components.findIndex(b => b.customId === 'help:goto') === -1)
+		this.onBoardComponents[row].components.unshift(new MessageButton({
+				style: 'PRIMARY',
+				type: 'BUTTON',
+				label: 'Go to...',
+				customId: 'help:goto',
+			}));
+
+		const buttonIndex = this.onBoardComponents[row].components.findIndex(b => b.customId === searchID);
+		if (buttonIndex === -1) return;
+		const button = this.onBoardComponents[row].components[buttonIndex] as MessageButton;
+
+		const newButton = new MessageButton(Object.assign(button, { disabled: true, style: overwriteStyle }));
+		this.onBoardComponents[row].components[buttonIndex] = newButton;
+		if (exceptOthers) enableAll(this.onBoardComponents[row].components, [button.customId]);
+	}
+
+	private activateButtons(options: Partial<ActivateButtonOptions>[], global?: Partial<ActivateButtonOptions>)
+	{
+		for (const option of options)
+			this.activateButton(Object.assign(option, global ?? {}) as ActivateButtonOptions);
+	}
+
+	private translateScopeToButtonId()
+	{
+		switch (this.scope)
+		{
+			case 'settings-list': return 'help:settings-list';
+			case 'categories-list': return 'help:categories-list';
+			case 'cmd-list':
+			case 'cmd-info':
+			case 'settings-info':
+			case 'main':
+				return null;
+		}
+	}
 }
 
 function createCategoryPages([category, cmdList]: [Command_Group, Collection<string, Sayumi_Command>])
@@ -674,7 +893,7 @@ function createCategoryPages([category, cmdList]: [Command_Group, Collection<str
 	return pages;
 }
 
-// #region Actions
+// #region Standalone
 interface ActivateButtonOptions
 {
 	row: number
@@ -683,46 +902,19 @@ interface ActivateButtonOptions
 	overwriteStyle?: MessageButtonOptions['style'],
 }
 
-function activateButton(components: MessageActionRow[], options: ActivateButtonOptions)
+function enableAll(components: MessageActionRowComponent[], exceptTargetIDs: string[])
 {
-	const { row, searchID, exceptOthers = false, overwriteStyle = 'SUCCESS' } = options;
-	if (Number.isNaN(row) || row < 0) return components;
-	if (components[row].components.findIndex(b => b.customId === 'help:goto') === -1)
-		components[row].components.unshift(new MessageButton({
-			style: 'PRIMARY',
-			type: 'BUTTON',
-			label: 'Go to...',
-			customId: 'help:goto',
-		}));
-
-	const buttonIndex = components[row].components.findIndex(b => b.customId === searchID);
-	const button = components[row].components[buttonIndex] as MessageButton;
-
-	const newButton = new MessageButton(Object.assign(button, { disabled: true, style: overwriteStyle }));
-	components[row].components[buttonIndex] = newButton;
-	if (exceptOthers) enableAll(components[row].components, button.customId);
-
-	return components;
-}
-
-function enableAll(components: MessageActionRowComponent[], exceptTargetID?: string)
-{
-	if (exceptTargetID && components.findIndex(b => b.customId === exceptTargetID) === -1) return;
+	if (!components) return;
 	for (const button of components as MessageButton[])
-	{
-		if (exceptTargetID)
-		{
-			if (!button.customId.includes('exit') && button.customId !== exceptTargetID) button.style = 'PRIMARY';
-			if (button.customId !== exceptTargetID) button.disabled = false;
-		}
-		else
-		{
-			if (!button.customId.includes('exit')) button.style = 'PRIMARY';
-			button.disabled = false;
-		}
-	}
+		if (!(exceptTargetIDs ?? []).includes(button.customId))
+			enableSingle(button);
 }
-// #endregion
+
+function enableSingle(button: MessageButton)
+{
+	if (!button.customId.includes('exit')) button.style = 'PRIMARY';
+	button.disabled = false;
+}
 
 function generateSettingsEmbed(settingsOptions = createSettingsList())
 {
@@ -802,7 +994,7 @@ function createButtons(data: ButtonData)
 	}
 	return out;
 }
-''
+
 async function getMenuOption(message: Message, options?: AwaitMessageComponentOptions<MessageComponentInteraction>)
 {
 	let targetName: string = null;
@@ -819,6 +1011,6 @@ async function getMenuOption(message: Message, options?: AwaitMessageComponentOp
 	.finally(() => void message.delete().catch(() => null));
 	return targetName;
 }
-//
+// #endregion
 
 export = cmd;

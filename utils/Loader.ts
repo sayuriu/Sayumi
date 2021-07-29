@@ -9,9 +9,9 @@
 
 import { existsSync, lstatSync, mkdirSync, statSync, readdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import chalk from 'chalk';
 
 import ParseError, { Errors } from './methods/common/parse-errors';
+import { foreground, background } from './methods/common/ansi-styles';
 import groupSettings from './GroupSettings';
 import * as Categories from '../utils/json/Categories.json';
 import Sayumi from './Client';
@@ -76,17 +76,17 @@ export default class Loader extends Loader_Base
             {
                 case 'start-scan':
                 {
-                    const string = chalk.hex('#30e5fc')('[Bootstrap] ')
-                                        + chalk.hex('8c8c8c')(`scan ${this.type}: `)
-                                        + chalk.hex('#c15ee6')(this.path)
+                    const string = foreground('#30e5fc')('[Bootstrap] ')
+                                        + foreground('#8c8c8c')(`scan ${this.type}: `)
+                                        + foreground('#c15ee6')(this.path)
                                         + ' scanning';
                     return process.stdout.write(string);
                 }
                 case 'end-scan':
                 {
-                    const string = chalk.hex('#30e5fc')('[Bootstrap] ')
-                                        + chalk.hex('8c8c8c')(`scan ${this.type}: `)
-                                        + chalk.hex('#c15ee6')(this.path)
+                    const string = foreground('#30e5fc')('[Bootstrap] ')
+                                        + foreground('#8c8c8c')(`scan ${this.type}: `)
+                                        + foreground('#c15ee6')(this.path)
                                         + ' complete\n';
 					process.stdout.cursorTo(0);
                     return process.stdout.write(string);
@@ -126,7 +126,7 @@ export default class Loader extends Loader_Base
 			// const fullPath = join(this.mainRoot, dirPath);
 
 			if (lstatSync(fullPath).isDirectory()) return this.recursiveLoad(client, fullPath);
-			if (file.endsWith(".js")) ParseCheck(this.type, client, fullPath, this);
+			if (file.endsWith(".js") || file.endsWith(".ts")) ParseCheck(this.type, client, fullPath, this);
 		});
 		if (this.type === 'cmd') BindCategory(client);
 	}
@@ -227,30 +227,30 @@ export function IssueWarns(dirIndex: DirIndex, type: AllowedTypes | string): boo
     function out(item: string[], customString: string)
     {
         process.stdout.write(customString);
-        item.forEach(i => process.stdout.write(`  ${chalk.hex('#b5b5b5')(i)}\n`));
+        item.forEach(i => process.stdout.write(`  ${foreground('#b5b5b5')(i)}\n`));
         process.stdout.write('\n');
     }
 
-    if (invalidNames.length) out(invalidNames, `${invalidNames.length} file${invalidNames.length > 1 ? 's' : ''} with ${chalk.hex('#e38c22')('no or invalid names')}:\n`);
-    if (emptyFiles.length) out(emptyFiles, `${emptyFiles.length} ${chalk.hex('#8f8f8f')(`empty file${emptyFiles.length > 1 ? 's' : ''}`)}:\n`);
-    if (noFunc.length) out(noFunc, `${noFunc.length} ${type}${noFunc.length > 1 ? 's' : ''} with ${chalk.hex('#cfcfcf').bgHex('#ff3333')('no callbacks')}:\n`);
+    if (invalidNames.length) out(invalidNames, `${invalidNames.length} file${invalidNames.length > 1 ? 's' : ''} with ${foreground('#e38c22')('no or invalid names')}:\n`);
+    if (emptyFiles.length) out(emptyFiles, `${emptyFiles.length} ${foreground('#8f8f8f')(`empty file${emptyFiles.length > 1 ? 's' : ''}`)}:\n`);
+    if (noFunc.length) out(noFunc, `${noFunc.length} ${type}${noFunc.length > 1 ? 's' : ''} with ${background('#ff3333')(foreground('#cfcfcf')('no callbacks'))}:\n`);
 
     if (errored.length)
     {
         const map = new Map<string, string[][]>();
         errored.forEach(e => ParseError(e, map));
 
-        if (!map.size) return process.stdout.write(`An ${chalk.hex('#d13636')(`error`)} has been detected while loading assets. Please attach breakpoints on this function next time to track down.\n`);
-        process.stdout.write(`Those files had ${chalk.hex('#d13636')(`errors`)} while compiling and skipped:\n`);
+        if (!map.size) return process.stdout.write(`An ${foreground('#d13636')(`error`)} has been detected while loading assets. Please attach breakpoints on this function next time to track down.\n`);
+        process.stdout.write(`Those files had ${foreground('#d13636')(`errors`)} while compiling and skipped:\n`);
         for (const entry of map.entries())
         {
             const errorName: string = entry[0];
             const errorStacks = entry[1];
 
-            process.stdout.write(chalk.hex('#212121').bgHex('#a8a8a8')(`${errorName}\n`));
+            process.stdout.write(background('#a8a8a8')(foreground('#212121')(`${errorName}\n`)));
             errorStacks.forEach(stack => {
                 const [eMessage, location, line] = stack;
-                process.stdout.write(`  ${chalk.hex('#7a7a7a')('line')} ${chalk.hex('#b8b8b8')(`${line}`)} ${chalk.hex('#7a7a7a')('of')} ${chalk.hex('#b5b5b5')(location)}: ${eMessage}\n`);
+                process.stdout.write(`  ${foreground('#7a7a7a')('line')} ${foreground('#b8b8b8')(`${line}`)} ${foreground('#7a7a7a')('of')} ${foreground('#b5b5b5')(location)}: ${eMessage}\n`);
             });
             process.stdout.write('\n');
         }
@@ -267,8 +267,8 @@ export function IssueWarns(dirIndex: DirIndex, type: AllowedTypes | string): boo
             }
             if (targetList.length)
             {
-                const outString = `${targetList.length} ${chalk.hex('#c9c7c7').bgHex('#c46e49')(`duplicated command entr${targetList.length > 1 ? 'ies' : 'y'}`)} found.\n Unstability may occur when executing ${targetList.length > 1 ? 'those entries' : 'this entry'}:\n  `
-                                        + `${chalk.hex('#9c9679')(targetList.join('\n  '))}\n`;
+                const outString = `${targetList.length} ${background('#c46e49')(foreground('#c9c7c7')(`duplicated command entr${targetList.length > 1 ? 'ies' : 'y'}`))} found.\n Unstability may occur when executing ${targetList.length > 1 ? 'those entries' : 'this entry'}:\n  `
+                                        + `${foreground('#9c9679')(targetList.join('\n  '))}\n`;
                 process.stdout.write(outString + '\n');
             }
         }
@@ -284,10 +284,10 @@ function summarize(client: Client, data: Loader, type: AllowedTypes)
 	const { dirIndex } = data;
 	if (type === 'cmd')
 	{
-		console.log(`${chalk.hex('#8c8c8c')(`[${calBytes(dirIndex.size)}]`)} ${chalk.hex('#2dd66b')(`${cmdc} ${typec}${cmdc > 1 ? 's' : ''}`)}`);
+		console.log(`${foreground('#8c8c8c')(`[${calBytes(dirIndex.size)}]`)} ${foreground('#2dd66b')(`${cmdc} ${typec}${cmdc > 1 ? 's' : ''}`)}`);
         Object.assign(dirIndex, { EntriesToCMD: EntryMergeAll(client) });
 	}
-	if (type === 'evt') console.log(`${chalk.hex('#8c8c8c')(`[${calBytes(dirIndex.size)}]`)} ${chalk.hex('#2dd66b')(`${client.HANDLED_EVENTS} ${typec}${client.HANDLED_EVENTS > 1 ? 's' : ''}`)}`);
+	if (type === 'evt') console.log(`${foreground('#8c8c8c')(`[${calBytes(dirIndex.size)}]`)} ${foreground('#2dd66b')(`${client.HANDLED_EVENTS} ${typec}${client.HANDLED_EVENTS > 1 ? 's' : ''}`)}`);
 
 	IssueWarns(dirIndex, type);
 }
@@ -397,7 +397,7 @@ import { Collection } from 'discord.js';
 import Command_Group from './interfaces/CmdGroup';
 import { Player as MusicPlayer, PlayerEvents } from 'discord-player';
 import Methods from './Methods';
-import { InternalClock } from './methods/time/set-glb-tclock-spd';
+import { InternalClock } from './InternalClock';
 
 interface Client extends Sayumi
 {

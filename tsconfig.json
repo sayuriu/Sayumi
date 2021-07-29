@@ -5,6 +5,7 @@
 		"lib": ["DOM", "ESNext"],
 		"module": "CommonJS",
 		"moduleResolution": "node",
+		"outDir": "./build",
 		"pretty": true,
 		"resolveJsonModule": true,
 		"target": "ESNext",
