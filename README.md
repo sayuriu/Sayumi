@@ -9,6 +9,6 @@ Current stage: Inheritance (You can check out the old code [here.](https://githu
 `cmds` inherit</br>
 `internal:clock` resize problems with `process.stdout` not firing `resize` event</br>
 ## Plans
-- Build the bot itself on updated libs and inherits old code
+- Build the bot itself on updated libs and inherits old code *(Ongoing)*
 - Create an API
 - Make a tea 🍵
