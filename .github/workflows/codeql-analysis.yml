@@ -30,7 +30,9 @@ jobs:
         languages: ${{ matrix.language }}
 
     - run: |
+       npm install
        tsc --build
+       cd ./build
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
