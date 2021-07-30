@@ -30,7 +30,7 @@ jobs:
         languages: ${{ matrix.language }}
 
     - run: |
-       tsc build
+       tsc --build
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
