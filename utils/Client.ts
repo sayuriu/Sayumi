@@ -1,8 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-empty-interface */
 /* eslint-disable @typescript-eslint/no-var-requires */
 /* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
 type T = {
 	[key: string]: any;
 }
@@ -32,21 +35,22 @@ import Database from './Database';
 import EvalInstance from './Eval';
 import EmbedConstructor from './Embeds';
 import Methods from './Methods';
-import Loader, { IssueWarns, ParseCheck } from './Loader';
+import Loader, { IssueWarns, ParseCheck } from './Loader-old';
 
-import AFKUser from './interfaces/AFKUser';
-import Sayumi_Command from './interfaces/Command';
-import Sayumi_Event from './interfaces/Event';
-import Command_Group from './interfaces/CmdGroup';
-import DatabaseInitOption  from './interfaces/DatabaseInitOption';
-import GuildData from './interfaces/GuildData';
+import AFKUser from '@interfaces/AFKUser';
+import Sayumi_Command from '@interfaces/Command';
+import Sayumi_SlashCommand from '@interfaces/SlashCommand';
+import Sayumi_Event from '@interfaces/Event';
+import Command_Group from '@interfaces/CmdGroup';
+import DatabaseInitOption  from '@interfaces/DatabaseInitOption';
+import GuildData from '@interfaces/GuildData';
 
-import GuildDatabase from './database/methods/GuildActions';
-import ClientBootstrap from './database/models/client_bootstrap';
+import GuildDatabase from '@dbMethods/GuildActions';
+import ClientBootstrap from '@dbModels/client_bootstrap';
 
 const DefaultIntents: IntentsString[] = [
 	'GUILDS',
-	'GUILD_EMOJIS',
+	'GUILD_EMOJIS_AND_STICKERS',
 	'GUILD_INVITES',
 	'GUILD_MEMBERS',
 	'GUILD_MESSAGES',
@@ -127,8 +131,9 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 	public CommandList = new Collection<string, Sayumi_Command>();
 	public CommandAliases = new Collection<string[], string>();
 	public CommandCategories = new Collection<string, Command_Group>();
+	public SlashCommands = new Collection<string, Sayumi_SlashCommand>();
 	public CategoryCompare = new Collection<string, string[]>();
-	public Cooldowns = new Collection<string, Collection<`${bigint}`, Collection<`${bigint}`, number>>>();
+	public Cooldowns = new Collection<string, Collection<string, Collection<string, number>>>();
 
 	public CachedGuildSettings = new Collection<string, GuildData>();
 	public EvalSessions = new Collection<string, EvalInstance>();
@@ -258,6 +263,7 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 	private CommandInit(): void
 	{
 		new Loader(this as Sayumi, [this.cmdDir, 'cmd']);
+		new Loader(this as Sayumi, ['slash', 'slash']);
 	}
 
 	/** This is for handling some additional runtime errors and events. */

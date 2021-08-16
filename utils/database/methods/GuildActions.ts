@@ -2,12 +2,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import GuildSchema from '../models/guild';
 import { Types } from 'mongoose';
-import DefaultSettings from '../../json/DefaultGuildSettings.json';
+import DefaultSettings from '@json/DefaultGuildSettings.json';
 import { Error, Inform, Warn } from '../../Logger';
-import GuildData from '../../interfaces/GuildData';
-import GD_Base from '../../abstract/guilddb';
-import { ExtGuild } from '../../interfaces/extended/ExtGuild';
-import Sayumi from '../../Client';
+import GuildData from '@interfaces/GuildData';
+import GD_Base from '@abstract/guilddb';
+import { ExtGuild } from '@interfaces/Extended';
+import Sayumi from 'core:client';
 
 export default class GuildDatabase extends GD_Base {
 

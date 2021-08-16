@@ -2,7 +2,7 @@ import { MessageButtonOptions } from "discord.js";
 
 interface ButtonData
 {
-	global?: MessageButtonOptions,
+	global?: Partial<MessageButtonOptions>,
 	individual: Partial<MessageButtonOptions>[],
 }
 

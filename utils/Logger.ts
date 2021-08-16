@@ -11,7 +11,7 @@ import { foreground, background } from './methods/common/ansi-styles';
 import { existsSync, mkdirSync } from 'fs';
 import { name as pName, author, version, dependencies, repository } from '../package.json';
 import DateTime from './methods/time/get-time';
-import UpdateClockSpeed from './InternalClock';
+import TerminalClock from './InternalClock';
 const logDir = `${__dirname}/../logs/`;
 
 const loggerOut = createLogger({
@@ -136,7 +136,7 @@ function logCarrier(logLevel: LogLevels, logMessage: any): void | Logger
 		// if (!logLevel.split('status:')[1].length) return this.carrier('err', '[Global Functions > Logger]: Empty status message.');
 		if (obj) console.log(output, obj);
 		else console.log(output);
-		return UpdateClockSpeed(1000);
+		return TerminalClock(1000);
 	}
 	console.log(output);
 	return loggerOut.log(logLevel.toLowerCase(), `- ${Timestamp}${functionClass_00 ? ` ${functionClass_00}` : ''} \n${logMessage}`);

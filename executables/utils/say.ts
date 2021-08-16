@@ -13,7 +13,7 @@ const cmd: Sayumi_Command = {
 	reqUsers: ['Anyone with the permission flagged above.'],
 	onTrigger: (client, message, ...args) => {
 		if (!args.length) return;
-		const targetChannel = message.guild.channels.cache.get(args[0] as `${bigint}`) ??
+		const targetChannel = message.guild.channels.cache.get(args[0] as string) ??
 							message.guild.channels.cache.find(ch => ch.name === args[0]);
 
 		if (targetChannel) args.splice(0, 1);

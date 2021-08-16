@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-empty-interface */
-import { DMChannel, GuildMember, Message, MessageEmbed, NewsChannel, TextChannel, ThreadChannel, User, VoiceChannel } from 'discord.js';
+import { DMChannel, GuildMember, Message, MessageEmbed, NewsChannel, TextBasedChannels, TextChannel, ThreadChannel, User, VoiceChannel } from 'discord.js';
 import GetTime from './methods/time/get-time';
 import { version as ver } from '../package.json';
 import { nasa as nasaProps } from './json/Props.json';
@@ -81,7 +81,7 @@ export default class EmbedConstructor {
 
     static error(message: Message, errorMsg?: string): MessageEmbed
     {
-		const checkChannel = (channel: GuildChannels | DMChannel) => {
+		const checkChannel = (channel: TextBasedChannels) => {
 			if (channel.type === 'DM') return 'In DM';
 			const ch = {
 				name: channel.name,

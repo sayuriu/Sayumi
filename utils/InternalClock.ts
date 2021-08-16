@@ -4,7 +4,7 @@
 
 import { background, bold, foreground } from "./methods/common/ansi-styles";
 
-export default function UpdateClockSpeed(newms: number): void
+export default function TerminalClock(newms: number): void
 {
 	clearInterval(global.TerminalClock);
 	global.TerminalClock = setInterval(InternalClock, newms);
@@ -47,7 +47,7 @@ export function InternalClock(x = process.stdout.columns - 25, y = process.stdou
 		foreground('#7a7a7a')(`${offset < 0 ? '+' : '-'}${offsetH.toString().padStart(2, '0')}${offsetM.toString().padStart(2, '0')}`),
 		// foreground('#8a8a8a')('>'),
 		'\u001b[0m',
-	].join(''))/* )*/;
+	].join(''));
 	process.stdout.cursorTo(x, y);
 	process.stdout.write(out);
 }

@@ -5,7 +5,7 @@ import { inspect } from 'util';
 import { readFileSync, writeFileSync } from 'fs';
 import { MessageAttachment, User, MessageReaction, MessageEmbed, TextChannel, Collection } from 'discord.js';
 import Sayumi from './Client';
-import { ExtMessage } from './interfaces/extended/ExtMessage';
+import { ExtMessage } from './interfaces/Extended';
 
 // TODO: use markdown instead
 const headerStringArray = [
@@ -47,7 +47,7 @@ export = class EvalInstance
 {
 	// #region Props
 	public readonly Prefix: string;
-	public readonly MainInstanceUserID: `${bigint}`;
+	public readonly MainInstanceUserID: string;
 	public readonly InstanceID: string;
 	public readonly ReactionFilter: (reaction: MessageReaction, user: User) => boolean;
 	public readonly UserFilter: (user: User) => boolean;
@@ -137,7 +137,7 @@ export = class EvalInstance
 			})
 			.catch(e => {
 				this.destroy((e as Error).toString().includes('time') ? 'Input timed out.' : null);
-			}) as Collection<`${bigint}`, ExtMessage>;
+			}) as Collection<string, ExtMessage>;
 
 		if (collected.first())
 		{
@@ -253,7 +253,7 @@ export = class EvalInstance
 		return;
 	}
 
-	static getSessionsID(userID: `${bigint}`, channelID: `${bigint}`): string
+	static getSessionsID(userID: string, channelID: string): string
 	{
 		return (parseInt(userID) + parseInt(channelID)).toString(16);
 	}

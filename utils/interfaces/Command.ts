@@ -1,5 +1,5 @@
 import { PermissionString } from "discord.js";
-import { ExtMessage } from "./extended/ExtMessage";
+import { ExtMessage } from "./Extended";
 import Sayumi from "../Client";
 
 /** All `[REQUIRED]` properties must be included for a command to load. */
@@ -50,7 +50,7 @@ interface Sayumi_Command
 	/** `[optional] Extra notes for this command.*/
 	notes?: string[];
 	/** `[REQUIRED]` The function which executes when this command is called. */
-	onTrigger: (client: Sayumi, message: ExtMessage, ...args: string[]) => void;
+	onTrigger?: (client: Sayumi, message: ExtMessage, ...args: string[]) => void;
 	// Hidden
 	prompt?: boolean;
 }

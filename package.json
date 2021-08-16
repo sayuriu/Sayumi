@@ -28,15 +28,12 @@
         "canvas": "^2.8.0",
         "chalk": "^4.1.1",
         "colorthief": "^2.3.2",
-        "discord-player": "^5.0.0-dev.92a3409.1626480154",
-        "discord.js": "^13.0.0-dev.77784ac.1626696170",
-        "erlpack": "^0.1.3",
+        "discord-player": "^5.0.1",
+        "discord.js": "^13.0.1",
         "express": "^4.17.1",
         "ffmpeg-static": "^4.3.0",
         "mime-types": "^2.1.31",
         "mongoose": "^5.12.15",
-        "node-fetch": "^2.6.1",
-        "node-ts": "^5.1.1",
         "parse-ms": "^2.1.0",
         "prism-media": "^1.2.9",
         "request": "^2.88.2",
@@ -54,11 +51,15 @@
         "@typescript-eslint/parser": "^4.28.1",
         "bufferutil": "^4.0.3",
         "dotenv": "^8.6.0",
+        "erlpack": "^0.1.3",
         "eslint": "^7.30.0",
+        "eslint-import-resolver-typescript": "^2.4.0",
         "eslint-plugin-import": "^2.23.4",
         "glob": "^7.1.7",
         "libsodium-wrappers": "^0.7.9",
+        "node-fetch": "^2.6.1",
         "ts-node": "^10.1.0",
+        "tsconfig-paths": "^3.10.1",
         "typescript": "^4.3.5",
         "typescript-eslint": "^0.0.1-alpha.0",
         "utf-8-validate": "^5.0.5",
@@ -66,6 +67,6 @@
         "zlib-sync": "^0.1.7"
     },
     "engines": {
-        "node": "16.x.x"
+        "node": "16.6.x"
     }
 }

@@ -11,11 +11,27 @@
 		"target": "ESNext",
 		"skipLibCheck": true,
 		"sourceMap": true,
-		"watch": true
+		"watch": true,
+
+		"baseUrl": "./",
+		"paths": {
+			// paths
+			"@interfaces/*": ["utils/interfaces/*"],
+			"@abstract/*": ["utils/abstract/*"],
+			"@methods/*": ["utils/methods/*"],
+			"@json/*": ["utils/json/*"],
+			"@dbModels/*": ["utils/database/models/*"],
+			"@dbMethods/*": ["utils/database/methods/*"],
+			// entities
+			"core:client": ["utils/Client"],
+			"core:logger": ["utils/Logger"],
+			"core:methods": ["utils/Methods"],
+			"core:loader": ["utils/Loader"],
+		}
 	},
 	"exclude": [
 		"**/Playground.ts",
 		"node_modules",
 		"temp"
-	]
+	],
 }

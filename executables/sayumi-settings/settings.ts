@@ -3,7 +3,7 @@ import Sayumi_Command from "../../utils/interfaces/Command";
 import settings from '../../utils/json/SettingsObjects.json';
 import { MessageEmbed as EmbedConstructor } from 'discord.js';
 import GuildData from "../../utils/interfaces/GuildData";
-import { ExtMessage } from "../../utils/interfaces/extended/ExtMessage";
+import { ExtMessage } from "../../utils/interfaces/Extended";
 
 const cmd: Sayumi_Command = {
 	name: 'settings',
@@ -252,7 +252,7 @@ class Settings
 					const target = message.guild.channels.cache.find(ch => confirm ? ch.id === _id : ch.name === args[1]);
 					if (!target) return void message.channel.send('Can\'t find the channel you specified.');
 
-					if (!AllowedReplyOn.some((chID: `${bigint}`) => chID === target.id)) return void message.channel.send('Make sure I can send messages in that channel before you type this command.');
+					if (!AllowedReplyOn.some((chID: string) => chID === target.id)) return void message.channel.send('Make sure I can send messages in that channel before you type this command.');
 
 					const index = FalseCMDReply.indexOf(target.id);
 					if (index > -1) return void message.channel.send('The target channel already has this setting enabled.');
@@ -368,7 +368,7 @@ class Settings
 					const target = message.guild.channels.cache.find(ch => confirm ? ch.id === _id : ch.name === args[1]);
 					if (!target) return void message.channel.send('Can\'t find the channel you specified.');
 
-					if (!AllowedReplyOn.some((chID: `${bigint}`) => chID === target.id)) return void message.channel.send('Make sure I can send messages in that channel before you type this command.');
+					if (!AllowedReplyOn.some((chID: string) => chID === target.id)) return void message.channel.send('Make sure I can send messages in that channel before you type this command.');
 					if (target.id === MessageLogChannel) return void message.channel.send('Already using that channel.');
 
 					void GuildDatabase.update(message.guild, { MessageLogChannel: target.id });

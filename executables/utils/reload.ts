@@ -1,5 +1,5 @@
 import Sayumi_Command from "../../utils/interfaces/Command";
-import Loader from '../../utils/Loader';
+import Loader from '../../utils/Loader-old';
 
 const cmd: Sayumi_Command = {
 	name: 'reload',

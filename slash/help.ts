@@ -1,28 +1,92 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { Collection, MessageEmbed, MessageActionRow, MessageButton, MessageSelectMenu, MessageButtonOptions, MessageActionRowComponent, SelectMenuInteraction, AwaitMessageComponentOptions, MessageComponentInteraction, Message, GuildMember, ButtonInteraction } from 'discord.js';
-import Sayumi from '../../utils/Client';
-import ButtonData from '@interfaces/ButtonData';
-import Command_Group from '@interfaces/CmdGroup';
-import Sayumi_Command from '@interfaces/Command';
-import { ExtMessage } from '@interfaces/Extended';
-import GuildSettings from '@interfaces/GuildSettings';
+import { ApplicationCommandData, AwaitMessageComponentOptions, Collection, CommandInteraction, GuildMember, Message, MessageActionRow, MessageActionRowComponent, MessageButton, MessageButtonOptions, MessageComponentInteraction, MessageEmbed, MessageSelectMenu, SelectMenuInteraction } from "discord.js";
+import Sayumi from "../utils/Client";
+import ButtonData from "@interfaces/ButtonData";
+import Command_Group from "@interfaces/CmdGroup";
+import Sayumi_Command from "@interfaces/Command";
+import Sayumi_SlashCommand from "@interfaces/SlashCommand";
+import { ExtCommandInteraction, ExtInteraction, ExtMessage } from "@interfaces/Extended";
+import GuildSettings from "@interfaces/GuildSettings";
+import generatePages from "@methods/common/generate-pages";
+import GetRandomize from "@methods/common/randomize";
 import responses from '@json/Responses.json';
 import settingsList from '@json/SettingsObjects.json';
-import generatePages from '@methods/common/generate-pages';
-import GetRandomize from '@methods/common/randomize';
 
-const cmd: Sayumi_Command = {
+const metadata: ApplicationCommandData = {
 	name: 'help',
-	aliases : ['helps', 'holps', '?'],
-	description: 'A help command for those in need.',
-	args: true,
-	groups: ['Information'],
-	cooldown: 15,
-	usage: ['[category?]', '[command?]'],
-	onTrigger: (_, message, ...args) => {
-		if (message.deletable) void message.delete();
-		new Handler(message, args);
-	},
+	description: 'For you who needs it.',
+	defaultPermission: true,
+	options: [
+		{
+			name: 'settings',
+			description: 'Search for guild configurations.',
+			type: 'SUB_COMMAND',
+			options: [
+				{
+					name: 'name',
+					description: 'The setting that you are trying to look for.',
+					type: 'STRING',
+					required: true,
+					choices: [
+						{
+							name: 'Shows all options.',
+							value: 'all',
+						},
+					],
+				},
+			],
+		},
+		{
+			name: 'category',
+			description: 'Search command categories.',
+			type: 'SUB_COMMAND',
+			options: [
+				{
+					name: 'name',
+					description: 'The setting that you are trying to look for.',
+					type: 'STRING',
+					required: true,
+					choices: [
+						{
+							name: 'Shows all options.',
+							value: 'all',
+						},
+					],
+				},
+			],
+		},
+		{
+			name: 'command',
+			description: 'Looks for a specific command.',
+			type: 'SUB_COMMAND',
+			options: [
+				{
+					name: 'name',
+					description: 'The setting that you are trying to look for.',
+					type: 'STRING',
+					required: true,
+				},
+			],
+		},
+		{
+			name: 'search',
+			description: 'Search for anything.',
+			type: 'SUB_COMMAND',
+			options: [
+				{
+					name: 'name',
+					description: 'What are you looking for?',
+					type: 'STRING',
+					required: true,
+				},
+			],
+		},
+		{
+			name: 'noargs',
+			description: 'Starts with a default interactive embed.',
+			type: 'SUB_COMMAND',
+		},
+	],
 };
 
 type Pages = [string, string, number[]][] & { len: number };
@@ -91,7 +155,7 @@ class Handler
 		'set': /((setting|settings):){1}/,
 	};
 
-	private initialMessage: ExtMessage;
+	private initalInteraction: ExtCommandInteraction;
 	private mainMessage: ExtMessage;
 	private currentReply: ExtMessage;
 	private initialArgs: string[];
@@ -103,9 +167,10 @@ class Handler
 	private onBoardComponents: (MessageActionRow)[] = [];
 	// #endregion
 
-	constructor(message: ExtMessage, args: string[])
+	constructor(interaction: CommandInteraction, args: string[])
 	{
-		this.initialMessage = message;
+		// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+		this.initalInteraction = interaction as ExtCommandInteraction;
 		this.initialArgs = args;
 		this.scope = 'main';
 
@@ -126,7 +191,8 @@ class Handler
 		});
 
 		this.onBoardComponents = [createActionRow(createButtons(this.mainOptionButtons))];
-		this.mainMessage = await this.initialMessage.channel.send({
+		this.activateButton({ row: 0, searchID: 'help:goto', overwriteStyle: 'SECONDARY' });
+		this.mainMessage = await this.initalInteraction.channel.send({
 			embeds: [embed],
 			components: this.onBoardComponents,
 		}) as ExtMessage;
@@ -151,7 +217,7 @@ class Handler
 			componentType: 'BUTTON',
 			idle: 0xea60,
 			time: 0x493e0,
-			filter: i => i.channelId === this.initialMessage.channel.id,
+			filter: i => i.channelId === this.initalInteraction.channel.id,
 		})
 		.on('collect', interaction => { void this.handleInteractions(interaction); });
 	}
@@ -227,7 +293,7 @@ class Handler
 		await interaction.reply('What do you want to search for?\nYou can type `cancel` or `exit` to opt out.');
 		this.currentReply = await interaction.fetchReply() as ExtMessage;
 		void this.mainMessage.channel.awaitMessages({
-			filter: _ => _.author.id === this.initialMessage?.author.id,
+			filter: _ => _.member.id === this.initalInteraction?.member.id,
 			max: 1,
 			time: 10000,
 			errors: ['time'],
@@ -380,7 +446,7 @@ class Handler
 					dispose: true,
 					idle: 0xea60,
 					time: 0x493e0,
-					filter: i => (i.member as GuildMember).id === this.initialMessage.author.id,
+					filter: i => (i.member as GuildMember).id === this.initalInteraction.user.id,
 				});
 
 				if (this.currentReply?.deleted) delete this.currentReply;
@@ -409,7 +475,7 @@ class Handler
 					dispose: true,
 					idle: 0xea60,
 					time: 0x493e0,
-					filter: i => (i.member as GuildMember).id === this.initialMessage.author.id,
+					filter: i => (i.member as GuildMember).id === this.initalInteraction.user.id,
 				});
 
 				if (this.currentReply?.deleted) delete this.currentReply;
@@ -445,12 +511,12 @@ class Handler
 					dispose: true,
 					idle: 0xea60,
 					time: 0x493e0,
-					filter: i => (i.member as GuildMember).id === this.initialMessage.author.id,
+					filter: i => (i.member as GuildMember).id === this.initalInteraction.user.id,
 				});
 
 				if (this.currentReply?.deleted) delete this.currentReply;
 
-				const c = this.initialMessage.client.CommandList.get(targetName);
+				const c = this.initalInteraction.client.CommandList.get(targetName);
 				if (!c)
 				{
 					forceQuit = true;
@@ -538,7 +604,7 @@ class Handler
 		await interaction.reply(`What page do you want to jump to?\n(From 1 to ${this.pages.length})`);
 		this.currentReply = await interaction.fetchReply() as ExtMessage;
 		void this.mainMessage.channel.awaitMessages({
-			filter: _ => _.author.id === this.initialMessage.author.id,
+			filter: _ => _.member.id === this.initalInteraction.user.id,
 			max: 1,
 			time: 10000,
 			errors: ['time'],
@@ -639,7 +705,7 @@ class Handler
 			placeholder: generatePlaceholderText(),
 		});
 
-		for (const category of this.initialMessage.client.CommandCategories.values())
+		for (const category of this.initalInteraction.client.CommandCategories.values())
 		{
 			if (category.commands.length)
 				menu.addOptions({
@@ -699,7 +765,7 @@ class Handler
 			usage = [],
 			usageSyntax = [] } = command;
 
-		const toUsageString = (u: string) => `\`${this.initialMessage.prefixCall}${name} ${u}\``;
+		const toUsageString = (u: string) => `\`/${name} ${u}\``;
 		const usageString = usage.map(toUsageString).join('\n');
 		const { SearchString } = this.mainMessage.client.Methods.Common;
 
@@ -739,7 +805,7 @@ class Handler
 				text:
 				(requiredParams.length > 0  ? `${optionalParams.length ? '<> required parameters' : '<> required parameters |'}` : '')
 				+ (optionalParams.length ? `${requiredParams.length ? ', [] optional parameters |' : '[] optional parameters |'}` : '')
-				+ `Current prefix: ${this.initialMessage.prefixCall}`,
+				+ `Current prefix: Slash command`,
 			},
 		});
 
@@ -783,7 +849,7 @@ class Handler
 				},
 			],
 			footer: {
-				text: `Prefix: ${this.initialMessage.prefixCall}`,
+				text: `Prefix: Slash command`,
 			},
 		});
 		if (this.pages.length > 1)
@@ -812,11 +878,11 @@ class Handler
 			fields: [
 				{
 					name: 'Usage',
-					value: `${usage.map(u => `\`${this.initialMessage.prefixCall}settings ${name} ${u}\``).join('\n')}`,
+					value: `${usage.map(u => `\`/settings ${name} ${u}\``).join('\n')}`,
 				},
 			],
 		});
-		if (notes) embed.setFooter(GetRandomize(notes).replace(/{prefix}/g, this.initialMessage.prefixCall));
+		if (notes) embed.setFooter(GetRandomize(notes).replace(/{prefix}/g, '/'));
 
 		return embed;
 	}
@@ -1012,5 +1078,3 @@ async function getMenuOption(message: Message, options?: AwaitMessageComponentOp
 	return targetName;
 }
 // #endregion
-
-export = cmd;

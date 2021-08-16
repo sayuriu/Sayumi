@@ -1,6 +1,6 @@
 import { Guild } from "discord.js";
-import GuildData from "../interfaces/GuildData";
-import DefaultGuildSettings from "../json/DefaultGuildSettings.json";
+import GuildData from "@interfaces/GuildData";
+import DefaultGuildSettings from "@json/DefaultGuildSettings.json";
 
 export default abstract class GuildDatabase
 {

@@ -1,6 +1,6 @@
 import { PermissionString } from "discord.js";
 import Sayumi_Command from "../../interfaces/Command";
-import { ExtMessage } from '../../interfaces/extended/ExtMessage';
+import { ExtMessage } from '../../interfaces/Extended';
 import GuildSettings from "../../interfaces/GuildSettings";
 
 export default function PermsCheck(CommandOrSetting: Sayumi_Command | GuildSettings, message: ExtMessage): PermsCheckResult
