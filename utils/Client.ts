@@ -47,6 +47,7 @@ import GuildData from '@interfaces/GuildData';
 
 import GuildDatabase from '@dbMethods/GuildActions';
 import ClientBootstrap from '@dbModels/client_bootstrap';
+import { MessageBasedExecutable, InteractionBasedExecutable } from './abstract/executables';
 
 const DefaultIntents: IntentsString[] = [
 	'GUILDS',
@@ -84,9 +85,10 @@ interface Sayumi_BotClientConfig
 abstract class Sayumi_BaseClient
 {
 	readonly ROOT_DIR: string;
-	CommandList: Collection<string, Sayumi_Command>;
+	CommandList: Collection<string, MessageBasedExecutable>;
 	CommandAliases: Collection<string[], string>;
 	CommandCategories: Collection<string, Command_Group>;
+	SlashCommands: Collection<string, InteractionBasedExecutable>;
 	EvalSessions: Collection<string, EvalInstance>;
 
 	CachedGuildSettings: Collection<string, GuildData>;
@@ -128,10 +130,10 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 	private exitReason: string;
 
 	public HANDLED_EVENTS = 0;
-	public CommandList = new Collection<string, Sayumi_Command>();
+	public CommandList = new Collection<string, MessageBasedExecutable>();
 	public CommandAliases = new Collection<string[], string>();
 	public CommandCategories = new Collection<string, Command_Group>();
-	public SlashCommands = new Collection<string, Sayumi_SlashCommand>();
+	public SlashCommands = new Collection<string, InteractionBasedExecutable>();
 	public CategoryCompare = new Collection<string, string[]>();
 	public Cooldowns = new Collection<string, Collection<string, Collection<string, number>>>();
 

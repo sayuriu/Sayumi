@@ -66,7 +66,7 @@ abstract class CommandExecutable extends BaseExecutable
 
 type ExtendWithClient<T> = T & { client: Sayumi };
 
-class MessageBasedExecutable extends CommandExecutable
+export class MessageBasedExecutable extends CommandExecutable
 {
 	aliases: string[] = [];
 	args = false;
@@ -77,18 +77,24 @@ class MessageBasedExecutable extends CommandExecutable
 	constructor(data: ExtendWithClient<Sayumi_MsgCommandStruct>)
 	{
 		super(data);
+		this.assign(data);
 	}
 
-	assign(data: unknown): void {
-		throw new Error('Method not implemented.');
+	assign(data: ExtendWithClient<Sayumi_MsgCommandStruct>): void {
+		for (const key in data)
+			if (data[key] !== undefined && Object.keys(this).includes(key))
+				this[key] = data[key as keyof ExtendWithClient<Sayumi_MsgCommandStruct>];
 	}
-	update(data: ExtendWithClient<Sayumi_MsgCommandStruct>)
+	update(data: ExtendWithClient<Sayumi_MsgCommandStruct>): void
 	{
-
+		this.assign(data);
+		this.client.CommandList.set(this.name, this);
 	}
-	destroy()
+	destroy(): void
 	{
-
+		this.client.CommandList.delete(this.name);
+		for (const key in this)
+			delete this[key];
 	}
 	onTrigger: (message: ExtMessage, ...args: string[]) => void;
 }
@@ -125,7 +131,7 @@ interface ChildGroup extends Base, HasChilds<Base>
 	onTrigger?: (interaction: ExtInteraction) => void;
 }
 
-class InteractionBasedExecutable extends CommandExecutable implements Partial<ChildGroup>, Partial<ParentGroup>
+export class InteractionBasedExecutable extends CommandExecutable implements Partial<ChildGroup>, Partial<ParentGroup>
 {
 	scope: 'global' | 'guild' = 'global';
 	defaultPermission = true;
@@ -142,18 +148,23 @@ class InteractionBasedExecutable extends CommandExecutable implements Partial<Ch
 	constructor(data: ExtendWithClient<Sayumi_IntCommandStruct>)
 	{
 		super(data);
+		this.assign(data);
 	}
-	assign(data: Sayumi_IntCommandStruct)
+	assign(data: Sayumi_IntCommandStruct): void
 	{
 		for (const key in data)
-			if (data[key] !== undefined && Object.keys(this).includes(key))
+			if (
+					data[key] !== undefined
+					&& Object.keys(this).includes(key)
+					&& !['update', 'destroy', 'assign'].includes(key)
+				)
 				this[key] = data[key as keyof Sayumi_IntCommandStruct];
 	}
-	update(data: Sayumi_IntCommandStruct)
+	update(data: Sayumi_IntCommandStruct): void
 	{
-
+		this.assign(data);
 	}
-	destroy()
+	destroy(): void
 	{
 		if (this.highestParentName)
 		{
@@ -201,7 +212,7 @@ type Sayumi_Event<E extends { [K in keyof E]: unknown[] }> = {
 
 type AllEvents = (ClientEvents & PlayerEvents);
 
-class EventExecutable extends BaseExecutable
+export class EventExecutable extends BaseExecutable
 {
 	name: keyof AllEvents;
 	once: boolean;
@@ -215,7 +226,7 @@ class EventExecutable extends BaseExecutable
 	{
 		return this.client.MusicPlayer.eventNames().includes(this.name as keyof PlayerEvents);
 	}
-	update(data: Sayumi_Event<AllEvents>)
+	update(data: Sayumi_Event<AllEvents>): void
 	{
 		this.assign(data);
 		if (this.isMusicPlayerEvent())
@@ -223,7 +234,7 @@ class EventExecutable extends BaseExecutable
 		else
 			this.client[this.once ? 'once' : 'on'](this.name as keyof ClientEvents, this.onEmit.bind(null));
 	}
-	destroy()
+	destroy(): void
 	{
 		if (this.isMusicPlayerEvent())
 			this.client.MusicPlayer.removeAllListeners(this.name);
@@ -233,7 +244,7 @@ class EventExecutable extends BaseExecutable
 			delete this[key];
 	}
 	onEmit: Sayumi_Event<AllEvents>['onEmit'];
-	assign(data: Sayumi_Event<AllEvents>)
+	assign(data: Sayumi_Event<AllEvents>): void
 	{
 		for (const key in data)
 			if (data[key] !== undefined && Object.keys(this).includes(key))
