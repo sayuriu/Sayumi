@@ -1,6 +1,5 @@
 import { PermissionString } from "discord.js";
 import { ExtMessage } from "./Extended";
-import Sayumi from "../Client";
 
 /** All `[REQUIRED]` properties must be included for a command to load. */
 interface Sayumi_Command
@@ -38,21 +37,14 @@ interface Sayumi_Command
 	/** `[optional]` You know the rules, and so do I~ (__Seriously, think carefully.__)*/
 	nsfw?: boolean | 'partial';
 	/** `[optional]` Enable if this command is owner-exclusive. This will bypass some parameters.*/
-	master_explicit?: boolean;
-	/** `[optional]` This command's usage. A prefix is pre-included, so only provide arguments/parameters here. */
 	usage?: string[];
 	/** `[optional]` An advanced take on `usage`. Show associated params type. (`usage` must be included for this to show.) */
 	usageSyntax?: string[];
 
-	// @flag:deprecated: use special[] list instead
-	/** `[optional]` Eval-explicit */
-	terminal?: boolean;
 	/** `[optional] Extra notes for this command.*/
 	notes?: string[];
 	/** `[REQUIRED]` The function which executes when this command is called. */
-	onTrigger?: (client: Sayumi, message: ExtMessage, ...args: string[]) => void;
-	// Hidden
-	prompt?: boolean;
+	onTrigger?: (message: ExtMessage, ...args: string[]) => void;
 }
 
 export default Sayumi_Command;

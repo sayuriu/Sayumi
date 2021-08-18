@@ -5,7 +5,7 @@ import { ExtInteraction } from "./Extended";
 interface Base
 {
 	name: string;
-	description: string;
+	description?: string;
 	scope: 'global' | 'guild';
 }
 
@@ -30,7 +30,7 @@ interface ChildGroup extends Base, HasChilds<Base>
 	// only available with SUB_COMMAND
 	options: ApplicationCommandOptionData[];
 	unstable?: boolean;
-	onTrigger?: (client: Sayumi, interaction: ExtInteraction) => void;
+	onTrigger?: (interaction: ExtInteraction) => void;
 }
 
 interface Sayumi_SlashCommand extends Partial<ChildGroup>, Partial<ParentGroup>
@@ -55,7 +55,7 @@ export class SlashCommandConstructor implements Sayumi_SlashCommand
 	type: 'SUB_COMMAND_GROUP' | 'SUB_COMMAND';
 	options: ApplicationCommandOptionData[];
 
-	onTrigger?: (client: Sayumi, interaction: ExtInteraction) => void;
+	onTrigger?: (interaction: ExtInteraction) => void;
 
 	constructor(config: Sayumi_SlashCommand)
 	{

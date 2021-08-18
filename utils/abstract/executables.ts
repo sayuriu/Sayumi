@@ -5,6 +5,26 @@ import Sayumi from 'core:client';
 import { PlayerEvents } from 'discord-player';
 import { ApplicationCommandOptionData, ClientEvents, Collection, PermissionString } from 'discord.js';
 
+type Solidify<T> = {
+	[P in keyof T]-?: T[P];
+}
+
+/** Excludes properties in `T1` that matches the type `T2`.*/
+type PropertyExclude<T1, T2> = {
+	[P
+		in keyof T1
+		as Exclude<
+					P,
+					P extends T2 ?
+						P : never
+				>
+	]: T1[P];
+}
+
+type ExecutableMetadata<T> = PropertyExclude<T, ('update' | 'destroy' | 'assign' | 'GetMetadata')>;
+
+type ExecutableCastPartial<T> = Partial<T> & { name: string }
+
 interface BaseExecutableMetadata
 {
 	name: string;
@@ -16,10 +36,18 @@ abstract class BaseExecutable
 {
 	abstract name: string;
 	client: Sayumi;
-	description? = 'No description available, yet!';
-	abstract update(data: BaseExecutableMetadata): void;
-	abstract destroy(): void;
-	abstract assign(data: unknown): void;
+	description = 'No description available, yet!';
+	protected abstract update(data: ExecutableMetadata<this>): void;
+	protected abstract destroy(): void;
+	protected abstract assign(data: ExecutableMetadata<this | unknown>): void;
+	GetMetadata(): ExecutableMetadata<this>
+	{
+		const ret: Partial<this> = {};
+		for (const key in this)
+			if (!['update', 'destroy', 'assign', 'GetMetadata'].includes(key))
+				ret[key] = this[key];
+		return ret as Solidify<typeof ret>;
+	}
 	constructor(data: BaseExecutableMetadata)
 	{
 		for (const key in data)
@@ -35,9 +63,7 @@ interface CommandExecutableMetadata
 	flags?: string[];
 	cooldown?: number;
 	guildCooldown?: boolean;
-	guildOnly?: boolean;
 	reqPerms?: PermissionString[];
-	reqUsers?: string[];
 	nsfw?: boolean | 'partial';
 	notes?: string[];
 	onTrigger?(...args: unknown[]): void;
@@ -49,13 +75,11 @@ abstract class CommandExecutable extends BaseExecutable
 	flags: string[] = [];
 	cooldown = 3;
 	guildCooldown = false;
-	guildOnly = false;
 	reqPerms: PermissionString[] = [];
-	reqUsers: string[] = [];
 	nsfw: boolean | 'partial' = false;
 	notes: string[] = [];
 	abstract onTrigger(...args: unknown[]): void;
-	constructor(data: CommandExecutableMetadata & BaseExecutableMetadata)
+	constructor(data: ExecutableCastPartial<ExecutableMetadata<CommandExecutable & BaseExecutable>>)
 	{
 		super(data);
 		for (const key in data)
@@ -64,27 +88,37 @@ abstract class CommandExecutable extends BaseExecutable
 	}
 }
 
-type ExtendWithClient<T> = T & { client: Sayumi };
+export type ExtendWithClient<T> = T & { client: Sayumi };
 
 export class MessageBasedExecutable extends CommandExecutable
 {
 	aliases: string[] = [];
+	groups: string[] = ['Unassigned'];
+	guildOnly = false;
 	args = false;
 	reqArgs = false;
+	reqUsers: string[] = [];
 	usage: string[] = [];
 	usageSyntax?: string[] = [];
 
 	constructor(data: ExtendWithClient<Sayumi_MsgCommandStruct>)
+	constructor(data: ExecutableMetadata<MessageBasedExecutable>)
+
+	constructor(data: ExecutableMetadata<MessageBasedExecutable>)
 	{
 		super(data);
 		this.assign(data);
 	}
 
-	assign(data: ExtendWithClient<Sayumi_MsgCommandStruct>): void {
+	protected assign(data: ExtendWithClient<Sayumi_MsgCommandStruct>): void {
 		for (const key in data)
 			if (data[key] !== undefined && Object.keys(this).includes(key))
 				this[key] = data[key as keyof ExtendWithClient<Sayumi_MsgCommandStruct>];
 	}
+
+	update(data: ExecutableMetadata<this>): void
+	update(data: ExtendWithClient<Sayumi_MsgCommandStruct>): void
+
 	update(data: ExtendWithClient<Sayumi_MsgCommandStruct>): void
 	{
 		this.assign(data);
@@ -107,15 +141,15 @@ interface Base
 	scope: 'global' | 'guild';
 }
 
-type HasChilds<T> = T & { childs?: Collection<ChildGroup['name'], ChildGroup> };
+export type HasChilds<T> = T & { childs?: Collection<ChildGroup['name'], ChildGroup> };
 
-interface ParentGroup extends Base, HasChilds<Base>
+export interface ParentGroup extends Base, HasChilds<Base>
 {
 	defaultPermission: boolean;
 	options: ApplicationCommandOptionData[];
 }
 
-interface ChildGroup extends Base, HasChilds<Base>
+export interface ChildGroup extends Base, HasChilds<Base>
 {
 	isParent: boolean;
 	parentName: string;
@@ -149,12 +183,35 @@ export class InteractionBasedExecutable extends CommandExecutable implements Par
 	{
 		super(data);
 		this.assign(data);
+		// master, SUB_COMMAND_GROUP
+		if (this.isParent)
+		{
+			// highest parent
+			if (!(this.parentName || this.highestParentName))
+				for (const attr of ['onTrigger', 'parentName', 'highestParentName', 'type'])
+					delete this[attr];
+			// lower parents
+			else
+			{
+				this.type = 'SUB_COMMAND_GROUP';
+				for (const attr of ['onTrigger', 'defaultPermission', 'highestParentName'])
+					delete this[attr];
+			}
+		}
+		// SUB_COMMAND
+		else
+		{
+			for (const attr of ['childs', 'defaultPermission'])
+				delete this[attr];
+			this.type = 'SUB_COMMAND';
+		}
 	}
 	assign(data: Sayumi_IntCommandStruct): void
 	{
 		for (const key in data)
 			if (
 					data[key] !== undefined
+					&& new Boolean((data[key] as unknown).toString()).valueOf()
 					&& Object.keys(this).includes(key)
 					&& !['update', 'destroy', 'assign'].includes(key)
 				)
@@ -200,7 +257,7 @@ export class InteractionBasedExecutable extends CommandExecutable implements Par
 // #endregion
 
 // #region evts
-type Sayumi_Event<E extends { [K in keyof E]: unknown[] }> = {
+export type Sayumi_Event<E extends { [K in keyof E]: unknown[] }> = {
 	[T in keyof E]: {
 		name: T,
 		client: Sayumi;
@@ -210,7 +267,7 @@ type Sayumi_Event<E extends { [K in keyof E]: unknown[] }> = {
 	};
 }[keyof E];
 
-type AllEvents = (ClientEvents & PlayerEvents);
+export type AllEvents = (ClientEvents & PlayerEvents);
 
 export class EventExecutable extends BaseExecutable
 {
