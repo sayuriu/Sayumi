@@ -4,12 +4,11 @@ import { ApplicationCommandData, ApplicationCommandOptionData, Collection } from
 
 import { Errors } from "@methods/common/parse-errors";
 import Sayumi from "core:client";
-import { AllEvents, Sayumi_Event, ChildGroup, HasChilds, MessageBasedExecutable, InteractionBasedExecutable, ParentGroup, EventExecutable } from "@abstract/executables";
+import { AllEvents, Sayumi_Event, ChildGroup, HasChilds, MessageBasedExecutable, ParentGroup, EventExecutable, InteractionBasedExecutable } from "@abstract/executables";
 import Sayumi_SlashCommand from "@interfaces/SlashCommand";
 import Sayumi_Command from "@interfaces/Command";
 
 import groupSettings, { GroupSettings as GroupSettingsStruct } from './GroupSettings';
-import { ExtendWithClient } from './abstract/executables';
 
 interface DirIndexMetadata
 {
@@ -168,14 +167,16 @@ export async function ParseCheck(type: AllowedTypes, client: Sayumi, path: strin
 			case 'evt':
 			{
 				if (imported instanceof EventExecutable)
-				{
+					imported.update(imported as Sayumi_Event<AllEvents>);
 
-				}
 				break;
 			}
 			case 'slash':
 			{
-
+// 				if (imported instanceof InteractionBasedExecutable)
+// 					imported.update(imported as Sayumi_Event<AllEvents>);
+//
+// 				break;
 			}
 		}
 	}

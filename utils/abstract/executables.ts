@@ -20,10 +20,11 @@ type PropertyExclude<T1, T2> = {
 				>
 	]: T1[P];
 }
+/** Get property names that are only avaliable in `T1`.*/
+type UniquePropNames<T1, T2> = keyof PropertyExclude<T1, keyof T2>;
 
 type ExecutableMetadata<T> = PropertyExclude<T, ('update' | 'destroy' | 'assign' | 'GetMetadata')>;
-
-type ExecutableCastPartial<T> = Partial<T> & { name: string }
+type ExecutableCastPartial<T> = Partial<T> & { name: string, client: Sayumi };
 
 interface BaseExecutableMetadata
 {
@@ -37,16 +38,16 @@ abstract class BaseExecutable
 	abstract name: string;
 	client: Sayumi;
 	description = 'No description available, yet!';
-	protected abstract update(data: ExecutableMetadata<this>): void;
+	protected abstract update(data: unknown): void;
 	protected abstract destroy(): void;
-	protected abstract assign(data: ExecutableMetadata<this | unknown>): void;
+	protected abstract assign(data: unknown): void;
 	GetMetadata(): ExecutableMetadata<this>
 	{
 		const ret: Partial<this> = {};
 		for (const key in this)
 			if (!['update', 'destroy', 'assign', 'GetMetadata'].includes(key))
 				ret[key] = this[key];
-		return ret as Solidify<typeof ret>;
+		return ret as unknown as ExecutableMetadata<this>;
 	}
 	constructor(data: BaseExecutableMetadata)
 	{
@@ -262,7 +263,8 @@ export type Sayumi_Event<E extends { [K in keyof E]: unknown[] }> = {
 		name: T,
 		client: Sayumi;
 		once?: boolean;
-		music?: E extends PlayerEvents ? true : false;
+		multi?: boolean;
+		music?: T extends UniquePropNames<PlayerEvents, ClientEvents> ? true : false;
 		onEmit: (...args: E[T]) => void;
 	};
 }[keyof E];
@@ -274,6 +276,7 @@ export class EventExecutable extends BaseExecutable
 	name: keyof AllEvents;
 	once: boolean;
 	music: boolean;
+	multi?: boolean;
 	constructor(data: Sayumi_Event<AllEvents>)
 	{
 		super(data);
@@ -286,6 +289,12 @@ export class EventExecutable extends BaseExecutable
 	update(data: Sayumi_Event<AllEvents>): void
 	{
 		this.assign(data);
+		if (!this.multi)
+			if (this.isMusicPlayerEvent())
+				this.client.MusicPlayer.removeAllListeners(this.name);
+			else
+				this.client.removeAllListeners(this.name as keyof ClientEvents);
+
 		if (this.isMusicPlayerEvent())
 			this.client.MusicPlayer[this.once ? 'once' : 'on'](this.name, this.onEmit.bind(null));
 		else

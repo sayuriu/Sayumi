@@ -47,7 +47,7 @@ import GuildData from '@interfaces/GuildData';
 
 import GuildDatabase from '@dbMethods/GuildActions';
 import ClientBootstrap from '@dbModels/client_bootstrap';
-import { MessageBasedExecutable, InteractionBasedExecutable } from './abstract/executables';
+import { MessageBasedExecutable, InteractionBasedExecutable, EventExecutable } from './abstract/executables';
 
 const DefaultIntents: IntentsString[] = [
 	'GUILDS',
@@ -129,11 +129,13 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 	private readonly _bugChannelID: string;
 	private exitReason: string;
 
-	public HANDLED_EVENTS = 0;
+	public HandledEvents = new Collection<string, EventExecutable>();
+
 	public CommandList = new Collection<string, MessageBasedExecutable>();
 	public CommandAliases = new Collection<string[], string>();
 	public CommandCategories = new Collection<string, Command_Group>();
 	public SlashCommands = new Collection<string, InteractionBasedExecutable>();
+
 	public CategoryCompare = new Collection<string, string[]>();
 	public Cooldowns = new Collection<string, Collection<string, Collection<string, number>>>();
 
@@ -188,10 +190,10 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 		const { token, cmdFolder, evtFolder, bugChannelID, MusicPlayerOptions } = core;
 
 		this.TokenVerif(token);
-		this.cmdDir = cmdFolder ?? 'executables';
-		this.evtDir = evtFolder ?? 'events';
+			this.cmdDir = cmdFolder ?? 'executables';
+			this.evtDir = evtFolder ?? 'events';
 
-		this._bugChannelID = bugChannelID;
+		this._bugChannelID = bugChannelID ?? null;
 		this.MusicPlayer = new MusicPlayer(this, MusicPlayerOptions ?? this.DefaultMusicPlayerSettings);
 		this.MusicPlayer.setMaxListeners(1);
 
@@ -347,7 +349,6 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 								{
 									delete require.cache[resolve(path)];
 									ParseCheck('evt', this, path, data, options);
-									this.HANDLED_EVENTS--;
 
 									let obj: Record<string, any>;
 									try {
@@ -446,11 +447,11 @@ export default class Sayumi extends DSClient implements Sayumi_BaseClient
 			wsStatus: this.ws.status,
 			gateway: this.ws.gateway,
 			cmds: this.CommandList.size,
-			events: this.HANDLED_EVENTS,
+			events: this.HandledEvents.size,
 			cachedUsers: this.users.cache.size,
 			cachedGuilds: this.guilds.cache.size,
 		})
-		.save({}, (err) => {
+		.save({}, (err: any) => {
 			if (err) return this.RaiseException(`[Database > Client Init Sync] ${err}`);
 		});
 		return;
