@@ -1,4 +1,5 @@
 # Sayumi
+**NOTE: This project is postponed, mainly because I don't have any creative ideas. May continue as soon as I found an unique implementable feature.**</br>
 *"A maid, for everyone."*</br>
 This is the repository of TypeScript migration from "Sayumi_JavaScript", utilizing Discord.js version 13 API.</br>
 Intended as a multi-purpose Discord bot with most commands from all DJS library can offer, also with utilities to support developer side.</br>
